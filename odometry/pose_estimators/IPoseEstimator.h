@@ -1,7 +1,7 @@
 #pragma once
 #include <opencv2/core.hpp>
 #include <vector>
-#include "OdometryTypes.h"
+#include "../OdometryTypes.h"
 
 class IPoseEstimator {
 public:

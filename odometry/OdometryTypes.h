@@ -15,27 +15,27 @@ enum class ComputeBackend {
 enum class BufferLocation {
     CPU_ONLY,
     GPU_ONLY,
-    SYNCED      // Data is identical on both devices
+    SYNCED      
 };
 
 class DeviceBuffer {
 private:
     BufferLocation location;
     cv::Mat cpu_mat;
-    
-    // We use a void pointer with a custom deleter to hold the cv::cuda::GpuMat 
-    // without requiring <opencv2/core/cuda.hpp> in this header file.
-    // This keeps the rest of the project compilation clean.
     std::shared_ptr<void> gpu_mat_ptr; 
-    
     cv::UMat opencl_mat; 
 
 public:
     DeviceBuffer() : location(BufferLocation::CPU_ONLY) {}
 
-    // Constructor for initial CPU data (e.g., from AirSim)
     explicit DeviceBuffer(const cv::Mat& cpu_data) 
         : cpu_mat(cpu_data.clone()), location(BufferLocation::CPU_ONLY) {}
+        
+    explicit DeviceBuffer(const cv::UMat& ocl_data) 
+        : opencl_mat(ocl_data.clone()), location(BufferLocation::SYNCED) {
+        // Automatically sync to CPU memory as well
+        cpu_mat = opencl_mat.getMat(cv::ACCESS_READ).clone(); 
+    }
 
     BufferLocation getLocation() const { return location; }
 
@@ -43,17 +43,11 @@ public:
     // LAZY SYNCHRONIZATION METHODS
     // =========================================================
 
-    // Returns CPU memory. Downloads from GPU ONLY if necessary.
-    cv::Mat& getAsCPU() {
-        if (location == BufferLocation::GPU_ONLY) {
-            // Logic to download from GPU to cpu_mat happens here
-            // (Implemented in the .cpp file where CUDA headers are included)
-            location = BufferLocation::SYNCED;
-        }
-        return cpu_mat;
-    }
+    // Declared here, implemented in OdometryTypes.cpp to hide CUDA headers
+    cv::Mat& getAsCPU();
+    void uploadToCUDA(); 
 
-    // Returns OpenCV Transparent API memory (AMD/Intel fallback)
+    // OpenCL fallback uses Transparent API, safe to inline
     cv::UMat& getAsOpenCL() {
         if (location == BufferLocation::CPU_ONLY) {
             cpu_mat.copyTo(opencl_mat);
@@ -62,33 +56,48 @@ public:
         return opencl_mat;
     }
 
-    // A getter for the CUDA pointer, cast locally by the GPU modules
     void* getCUDAPointer() {
         return gpu_mat_ptr.get();
     }
-    
-    // Methods to allocate and upload to CUDA (implemented in .cpp)
-    void uploadToCUDA(); 
 };
-
 
 struct CameraIntrinsics {
     float fx, fy, cx, cy;
 };
 
-// The Master Configuration Object
+struct BucketingConfig {
+    bool enabled = false;
+    int grid_cols = 10;
+    int grid_rows = 10;
+    int max_features_per_bucket = 20;
+};
+
+
 struct OdometryConfig {
     ComputeBackend backend = ComputeBackend::CPU;
     CameraIntrinsics intrinsics;
     
-    // Generic dictionaries for module-specific tuning
+    std::string detector_type = "ORB"; 
+    std::string matcher_type = "FLANN"; 
+
+    int num_threads = 1; // <-- NEW: Global thread limit
+
+    BucketingConfig bucketing_params;
+
     std::map<std::string, float> detector_params;
     std::map<std::string, float> matcher_params;
     std::map<std::string, float> pose_params;
 };
 
-// Ground Truth State from AirSim
 struct GroundTruthData {
-    cv::Vec3f position;    // True X, Y, Z
-    cv::Vec3f orientation; // True Pitch, Roll, Yaw
+    cv::Vec3f position;    
+    cv::Vec3f orientation; 
+};
+
+struct PipelineMetrics {
+    double time_detect_ms = 0.0;
+    double time_match_ms = 0.0;
+    double time_pose_ms = 0.0;
+    double time_total_ms = 0.0;
+    double fps = 0.0;
 };

@@ -1,6 +1,6 @@
 #pragma once
 #include <opencv2/core.hpp>
-#include "OdometryTypes.h"
+#include "../OdometryTypes.h"
 
 class ITrajectoryIntegrator {
 public:

@@ -2,6 +2,8 @@
 #include <memory>
 #include <vector>
 #include <opencv2/core.hpp>
+// Include highgui for colors (if not already included)
+#include <opencv2/imgproc.hpp> 
 
 #include "OdometryTypes.h"
 #include "detectors/IFeatureDetector.h"
@@ -12,17 +14,18 @@
 
 class OdometryPipeline {
 private:
-    // Core Configuration
     OdometryConfig config;
 
-    // State Memory (The "Previous Frame")
     bool is_first_frame;
     DeviceBuffer prev_image;
     DeviceBuffer prev_descriptors;
     std::vector<cv::KeyPoint> prev_keypoints;
     GroundTruthData gt_prev;
 
-    // The decoupled algorithm interfaces
+    // --- NEW: Logging & Visualization ---
+    PipelineMetrics metrics;
+    cv::Mat debug_frame;
+
     std::unique_ptr<IFeatureDetector> detector;
     std::unique_ptr<IFeatureMatcher> matcher;
     std::unique_ptr<IPoseEstimator> pose_estimator;
@@ -30,10 +33,8 @@ private:
     std::unique_ptr<ITrajectoryIntegrator> integrator;
 
 public:
-    // Static Builder: Assembles the pipeline via domain-specific factories
     static std::unique_ptr<OdometryPipeline> build(const OdometryConfig& config);
 
-    // Constructor for dependency injection
     OdometryPipeline(const OdometryConfig& cfg,
                      std::unique_ptr<IFeatureDetector> d,
                      std::unique_ptr<IFeatureMatcher> m,
@@ -41,13 +42,13 @@ public:
                      std::unique_ptr<IScaleEstimator> s,
                      std::unique_ptr<ITrajectoryIntegrator> i);
 
-    // Main execution loop called by the worker thread
     void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt);
 
-    // Trajectory Accessors
     cv::Mat getGlobalTransformVO() const;
     cv::Mat getGlobalTransformVIO() const;
-    
-    // Status flag
     bool isTrackingActive() const;
+
+    // --- NEW: Accessors ---
+    const PipelineMetrics& getMetrics() const { return metrics; }
+    cv::Mat getDebugFrame() const { return debug_frame; }
 };

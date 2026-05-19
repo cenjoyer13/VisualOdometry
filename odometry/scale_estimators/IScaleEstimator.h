@@ -1,5 +1,5 @@
 #pragma once
-#include "OdometryTypes.h"
+#include "../OdometryTypes.h"
 
 class IScaleEstimator {
 public:

@@ -1,7 +1,7 @@
 #pragma once
 #include <vector>
 #include <opencv2/core.hpp>
-#include "OdometryTypes.h"
+#include "../OdometryTypes.h"
 
 class IFeatureMatcher {
 public:

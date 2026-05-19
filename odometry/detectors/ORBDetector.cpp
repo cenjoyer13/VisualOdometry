@@ -1,5 +1,6 @@
 #include "ORBDetector.h"
 #include <iostream>
+#include <opencv2/imgproc.hpp>
 
 // Needed for OpenCL T-API status checks
 #include <opencv2/core/ocl.hpp> 

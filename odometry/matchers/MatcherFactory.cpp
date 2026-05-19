@@ -1,11 +1,16 @@
 #include "MatcherFactory.h"
 #include "KinematicMatcher.h"
+#include "FLANNMatcher.h"
 #include <iostream>
 
 std::unique_ptr<IFeatureMatcher> MatcherFactory::create(const OdometryConfig& config) {
-    // Check config for algorithm type (e.g., if config.matcher_params["type"] == "LightGlue")
-    // For now, we default to the Kinematic Matcher.
-    
-    std::cout << "[MatcherFactory] Instantiating KinematicMatcher. Hardware routing deferred to class." << std::endl;
+    // Route based on the string parsed from the YAML file
+    if (config.matcher_type == "FLANN") {
+        std::cout << "[MatcherFactory] Instantiating FLANNMatcher." << std::endl;
+        return std::make_unique<FLANNMatcher>(config);
+    }
+
+    // Default fallback
+    std::cout << "[MatcherFactory] Instantiating KinematicMatcher." << std::endl;
     return std::make_unique<KinematicMatcher>(config);
 }

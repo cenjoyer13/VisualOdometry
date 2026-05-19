@@ -34,12 +34,20 @@ void DualPathIntegrator::integrate(const cv::Mat& local_R, const cv::Mat& local_
     local_R.convertTo(R_64, CV_64F);
     local_t.convertTo(t_64, CV_64F);
 
-    // Apply the absolute metric scale to the translation vector
-    cv::Mat scaled_t = t_64 * scale;
+    // =========================================================================
+    // CRITICAL FIX: Coordinate Inversion
+    // OpenCV returns R,t mapping points from Cam1 -> Cam2.
+    // To track the camera, we need the pose of Cam2 in Cam1's frame (the inverse).
+    // =========================================================================
+    cv::Mat R_cam = R_64.t(); 
+    cv::Mat t_cam = -R_cam * t_64;
+
+    // Apply the absolute metric scale to the true camera translation vector
+    cv::Mat scaled_t = t_cam * scale;
 
     // 2. Build local 4x4 transformation matrix
     cv::Mat T_local = cv::Mat::eye(4, 4, CV_64F);
-    R_64.copyTo(T_local(cv::Rect(0, 0, 3, 3)));
+    R_cam.copyTo(T_local(cv::Rect(0, 0, 3, 3)));
     scaled_t.copyTo(T_local(cv::Rect(3, 0, 1, 3)));
 
     // ==========================================
