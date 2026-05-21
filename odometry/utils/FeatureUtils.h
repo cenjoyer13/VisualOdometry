@@ -13,4 +13,11 @@ public:
                                   cv::Mat& out_descriptors,
                                   const BucketingConfig& bucketing_config,
                                   int num_threads);
+    
+    static void filterByGrid(const std::vector<cv::KeyPoint>& in_kpts,
+    		      const cv::Mat& in_desc,
+    		      std::vector<cv::KeyPoint>& out_kpts,
+    		      cv::Mat& out_desc,
+    		      int image_width, int image_height,
+    		      const BucketingConfig& params);
 };

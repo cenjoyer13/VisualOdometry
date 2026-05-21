@@ -1,29 +1,27 @@
-cmake_minimum_required(VERSION 3.15)
-project(OdometryKittiTest LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.18) 
+project(OdometryKittiTest LANGUAGES CXX) 
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- FIND OPENCV 4.8.0 ---
-# Since you have a custom build, you might need to specify the path when running cmake:
-# cmake -DOpenCV_DIR=/path/to/your/opencv/build ..
 find_package(OpenCV 4.8.0 REQUIRED)
 message(STATUS "Found OpenCV: ${OpenCV_VERSION} at ${OpenCV_DIR}")
 
-# --- CUDA CHECK ---
-# For this testing branch, we are intentionally disabling CUDA compilation
-# to avoid linking errors with missing opencv_contrib modules (cudafeatures2d).
-# The pipeline will gracefully route to the CPU/OpenCL fallback.
+# --- OPENCV CUDA DISABLED ---
+# We intentionally do not define HAS_CUDA here. 
+# This prevents OpenCV from looking for missing contrib headers.
+# LightGlue will still run on the GPU via ONNX Runtime's independent CUDA engine!
+message(STATUS "OpenCV CUDA modules disabled. Neural Network CUDA enabled via ONNX.")
 
-# list(FIND OpenCV_INCLUDE_DIRS "opencv2/core/cuda.hpp" CUDA_FOUND_IDX)
-# if(NOT CUDA_FOUND_IDX EQUAL -1 OR EXISTS "${OpenCV_INCLUDE_DIRS}/opencv2/core/cuda.hpp")
-#     message(STATUS "OpenCV CUDA modules detected.")
-#     add_compile_definitions(HAS_CUDA)
-# else()
-#     message(WARNING "OpenCV CUDA not found. Defaulting to CPU/OpenCL.")
-# endif()
+# --- ONNX RUNTIME SETUP (STRICT ABSOLUTE PATH) ---
+set(ONNXRUNTIME_DIR "/usr/local/onnxruntime")
+include_directories(${ONNXRUNTIME_DIR}/include)
 
-message(STATUS "Testing Branch: Forcing CPU/OpenCL mode. CUDA compilation disabled.")
+find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
+if(NOT ONNXRUNTIME_LIB)
+    message(FATAL_ERROR "Could not find libonnxruntime.so in ${ONNXRUNTIME_DIR}/lib!")
+endif()
 
 # --- GATHER ODOMETRY SOURCE FILES ---
 file(GLOB_RECURSE SRC_ODOMETRY "odometry/*.cpp")
@@ -34,4 +32,13 @@ add_executable(KittiEvaluator
     ${SRC_ODOMETRY}
 )
 
-target_link_libraries(KittiEvaluator PRIVATE ${OpenCV_LIBS})
+target_link_libraries(KittiEvaluator PRIVATE 
+    ${OpenCV_LIBS}
+    ${ONNXRUNTIME_LIB}
+)
+
+# --- BURN RPATHS INTO BINARY ---
+# We use $ORIGIN/.. to make the path relative to your build/ directory,
+# ensuring it always finds the cuda12_libs folder in your project root!
+set_target_properties(KittiEvaluator PROPERTIES INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs")
+set_target_properties(KittiEvaluator PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)

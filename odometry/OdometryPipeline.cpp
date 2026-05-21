@@ -137,9 +137,13 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         double scale = scale_estimator->updateScale(gt_prev, current_gt);
         integrator->integrate(R, t, scale, current_gt.orientation);
 
-        prev_image = frame;
-        prev_descriptors = curr_descriptors;
-        prev_keypoints = curr_keypoints;
+        // Only update the anchor if we physically moved, or if we lost tracking
+        double norm_t = cv::norm(t);
+        if (norm_t > 1e-6 || pts_curr.size() < 8) {
+            prev_image = frame;
+            prev_descriptors = curr_descriptors;
+            prev_keypoints = curr_keypoints;
+        }
     }
 
     gt_prev = current_gt;

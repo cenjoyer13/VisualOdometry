@@ -77,7 +77,7 @@ struct OdometryConfig {
     ComputeBackend backend = ComputeBackend::CPU;
     CameraIntrinsics intrinsics;
     
-    std::string detector_type = "ORB"; 
+    std::string detector_type = "SIFT"; 
     std::string matcher_type = "FLANN"; 
 
     int num_threads = 1; // <-- NEW: Global thread limit

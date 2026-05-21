@@ -88,6 +88,6 @@ std::vector<cv::DMatch> KinematicMatcher::match(DeviceBuffer& desc_old,
             }
         }
     }
-
+    
     return good_matches;
 }

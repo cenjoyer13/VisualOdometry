@@ -85,3 +85,57 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
         }
     }
 }
+
+void FeatureUtils::filterByGrid(
+    const std::vector<cv::KeyPoint>& in_kpts,
+    const cv::Mat& in_desc,
+    std::vector<cv::KeyPoint>& out_kpts,
+    cv::Mat& out_desc,
+    int image_width, int image_height,
+    const BucketingConfig& params)
+{
+    int cols = params.grid_cols;
+    int rows = params.grid_rows;
+    int max_per_bucket = params.max_features_per_bucket;
+
+    float cell_w = static_cast<float>(image_width) / cols;
+    float cell_h = static_cast<float>(image_height) / rows;
+
+    // Create a 2D grid of vectors to hold indices of keypoints
+    std::vector<std::vector<std::vector<int>>> grid(rows, std::vector<std::vector<int>>(cols));
+
+    // Place each keypoint index into its corresponding bucket
+    for (int i = 0; i < in_kpts.size(); ++i) {
+        int col_idx = std::min(static_cast<int>(in_kpts[i].pt.x / cell_w), cols - 1);
+        int row_idx = std::min(static_cast<int>(in_kpts[i].pt.y / cell_h), rows - 1);
+        grid[row_idx][col_idx].push_back(i);
+    }
+
+    out_kpts.clear();
+    std::vector<int> final_indices;
+
+    // Sort each bucket by response (score) and keep the top N
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            auto& cell_indices = grid[r][c];
+            
+            // Sort indices descending based on keypoint response
+            std::sort(cell_indices.begin(), cell_indices.end(), [&](int a, int b) {
+                return in_kpts[a].response > in_kpts[b].response;
+            });
+
+            int keep_count = std::min(static_cast<int>(cell_indices.size()), max_per_bucket);
+            for (int i = 0; i < keep_count; ++i) {
+                int original_idx = cell_indices[i];
+                out_kpts.push_back(in_kpts[original_idx]);
+                final_indices.push_back(original_idx);
+            }
+        }
+    }
+
+    // Construct the new dense descriptor matrix containing only the survivors
+    out_desc = cv::Mat(final_indices.size(), in_desc.cols, in_desc.type());
+    for (size_t i = 0; i < final_indices.size(); ++i) {
+        in_desc.row(final_indices[i]).copyTo(out_desc.row(i));
+    }
+}

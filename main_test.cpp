@@ -8,9 +8,11 @@
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/core/utils/logger.hpp>
 
 #include "odometry/OdometryPipeline.h"
 #include "odometry/OdometryTypes.h"
+#include "odometry/utils/RealTime2DTrajectory.h"
 
 // Math helper: Rotation Matrix to Quaternion
 void rot2quat(const cv::Mat& R, float& qx, float& qy, float& qz, float& qw) {
@@ -81,7 +83,10 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: ./KittiEvaluator <yaml_config_path>\n";
         return -1;
     }
-
+    
+    setvbuf(stdout, NULL, _IONBF, 0);
+    cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
+    
     std::string yaml_file = argv[1];
 
     // 1. Read YAML Configuration
@@ -119,6 +124,7 @@ int main(int argc, char** argv) {
     config.matcher_params["ratio_thresh"] = (float)fs["matcher"]["distance_ratio"];
     if (config.matcher_type == "FLANN" && !fs["matcher"]["FLANN"].empty()) {
         config.matcher_params["kdTrees"] = (float)(int)fs["matcher"]["FLANN"]["kdTrees"];
+        config.matcher_params["searchChecks"] = (float)(int)fs["matcher"]["FLANN"]["searchChecks"];
     }
 
     // --- PARSE BUCKETING PARAMS ---
@@ -133,8 +139,22 @@ int main(int argc, char** argv) {
     if (!fs["system"]["num_threads"].empty()) {
         config.num_threads = (int)fs["system"]["num_threads"];
     }
+    // --- Parse Core System Hardware Preferences ---
+    std::string backend_str = "CPU"; // Safe default
+    if (!fs["system"]["backend"].empty()) {
+        backend_str = (std::string)fs["system"]["backend"];
+    }
 
-    config.pose_params["min_disparity"] = 1.5f;
+    // Map string to enum
+    if (backend_str == "CUDA") {
+        config.backend = ComputeBackend::CUDA;
+    } else if (backend_str == "OPENCL") {
+        config.backend = ComputeBackend::OPENCL;
+    } else {
+        config.backend = ComputeBackend::CPU;
+    }
+    
+    config.pose_params["min_disparity"] = 2.0f;
 
     // --- EXTRACT PATHS FROM YAML ---
     std::string root_path = (std::string)fs["dataset"]["root_path"];
@@ -162,6 +182,8 @@ int main(int argc, char** argv) {
 
     std::cout << "[EVALUATOR] Starting KITTI Sequence...\n";
     std::cout << "------------------------------------------------------\n";
+    
+    RealTime2DTrajectory trajectory_visualizer(0.5f);
 
     while (std::getline(gt_stream, gt_line)) {
         GroundTruthData current_gt;
@@ -189,15 +211,23 @@ int main(int argc, char** argv) {
 
             log_file << frame_id << "," << pred_x << "," << pred_y << "," << pred_z << ","
                      << qx << "," << qy << "," << qz << "," << qw << "\n";
+                     
+            // --- NEW: Send current positions to the visualizer ---
+            cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
+            cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
+            cv::imshow("KITTI 2D Trajectory", traj_img);
         }
 
         const PipelineMetrics& m = pipeline->getMetrics();
-        std::cout << "\rFrame: " << std::setw(4) << frame_id 
-                  << " | Detect: " << std::fixed << std::setprecision(1) << m.time_detect_ms << "ms"
-                  << " | Match: " << m.time_match_ms << "ms"
-                  << " | Pose: " << m.time_pose_ms << "ms"
-                  << " | Total: " << m.time_total_ms << "ms"
-                  << " | FPS: " << m.fps << std::flush;
+	// Compacted string (~55 characters) to completely avoid 80-column line-wrapping
+        printf("\r[%04d] Det:%4.0fms | Mat:%4.0fms | Pos:%3.0fms | Tot:%4.0fms | FPS:%4.1f   ", 
+               frame_id, 
+               m.time_detect_ms, 
+               m.time_match_ms, 
+               m.time_pose_ms, 
+               m.time_total_ms, 
+               m.fps);
+        fflush(stdout); // Manually command the OS to dump the buffer
 
         cv::Mat vis = pipeline->getDebugFrame();
         if (!vis.empty()) {
@@ -207,7 +237,9 @@ int main(int argc, char** argv) {
 
         frame_id++;
     }
-
+    
+    printf("\n");
+	
     log_file.close();
     std::cout << "\n[EVALUATOR] Complete. Trajectory saved to kitti_trajectory.csv\n";
     return 0;
