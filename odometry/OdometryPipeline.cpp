@@ -43,7 +43,7 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
             0.0, 0.0, 1.0);
 
         // 2. Pass it to the LBA constructor alongside the window size
-        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_window_size);
+        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_window_size, config.lba_opt_stride);
 
         lba_->start(); // Spin up the parallel optimization thread
     }
@@ -153,40 +153,49 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         double scale = scale_estimator->updateScale(gt_prev, current_gt);
         integrator->integrate(R, t, scale, current_gt.orientation);
 
-        // Only update the anchor if we physically moved, or if we lost tracking
-        double norm_t = cv::norm(t);
-        if (norm_t > 1e-6 || pts_curr.size() < 8) {
-            prev_image = frame;
-            prev_descriptors = curr_descriptors;
-            prev_keypoints = curr_keypoints;
-            
-            // --- UPDATED LBA HANDOFF ---
-            if (lba_ && !R.empty() && !t.empty()) {
-                BAFrame new_frame;
-                new_frame.frame_id = current_frame_id_;
-            
-                // REMEMBER: Always .clone() to prevent cross-thread memory corruption!
-                new_frame.R = R.clone(); 
-                new_frame.t = t.clone() * scale; // Apply the scale factor before sending to LBA
-           
-                // Pass the raw 2D points and their index mapping to the previous frame
-                std::vector<cv::Point2f> curr_pts;
-                cv::KeyPoint::convert(curr_keypoints, curr_pts);
-                new_frame.points2D = curr_pts;
-                new_frame.matched_prev_idx = matched_prev_idx;
-            
-                lba_->pushFrame(new_frame);
-            }
+        // Phase 3: push every frame to LBA so prev_frame_track_ids_ stays in
+        // sync with the frontend's match indexing. Stationary frames are
+        // marked so LBA collapses their BetweenFactor to a tight identity.
+        const double norm_t = cv::norm(t);
+        const bool stationary = (norm_t <= 1e-6);
 
-            if (lba_) {
-                cv::Mat T_correction;
-                if (lba_->getCorrection(T_correction)) {
-                    integrator->applyCorrection(T_correction);
-                    // std::cout << "[Pipeline] Applied asynchronous LBA drift correction." << std::endl;
-                }
+        // Advance the frontend anchor every frame as well, so the next
+        // match's queryIdx refers to the keypoints we just pushed.
+        prev_image = frame;
+        prev_descriptors = curr_descriptors;
+        prev_keypoints = curr_keypoints;
+
+        if (lba_ && !R.empty() && !t.empty()) {
+            // Snapshot the integrator's world pose AFTER integrate() so the
+            // snapshot reflects the pose of this frame in the world. The LBA
+            // correction will be computed as a delta against this snapshot.
+            const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
+            integrator->snapshotPose(frame_id);
+
+            BAFrame new_frame;
+            new_frame.frame_id = frame_id;
+            new_frame.R = R.clone();
+            new_frame.t = t.clone() * scale;  // metric-scaled
+            new_frame.is_stationary = stationary;
+            cv::Mat snap;
+            integrator->getSnapshot(frame_id, snap);
+            new_frame.T_world = snap;
+
+            std::vector<cv::Point2f> curr_pts;
+            cv::KeyPoint::convert(curr_keypoints, curr_pts);
+            new_frame.points2D = curr_pts;
+            new_frame.matched_prev_idx = matched_prev_idx;
+
+            lba_->pushFrame(new_frame);
+        }
+
+        if (lba_) {
+            BACorrection corr;
+            if (lba_->getCorrection(corr)) {
+                integrator->applyCorrection(corr.frame_id, corr.T_world_optimized);
             }
         }
-        
+
         current_frame_id_++;
     }
 

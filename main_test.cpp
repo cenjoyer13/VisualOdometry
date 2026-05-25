@@ -139,6 +139,9 @@ int main(int argc, char** argv) {
     if (!fs["local_bundle_adjustment"].empty()) {
         config.use_local_ba = (int)fs["local_bundle_adjustment"]["enabled"] != 0;
         config.lba_window_size = (int)fs["local_bundle_adjustment"]["window_size"];
+        if (!fs["local_bundle_adjustment"]["opt_stride"].empty()) {
+            config.lba_opt_stride = (int)fs["local_bundle_adjustment"]["opt_stride"];
+        }
     }
     
     // --- NEW: PARSE THREAD LIMIT ---

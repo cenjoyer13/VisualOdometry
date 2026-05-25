@@ -84,6 +84,7 @@ struct OdometryConfig {
     
     bool use_local_ba = false;
     int lba_window_size = 10;
+    int lba_opt_stride = 2;
     
     BucketingConfig bucketing_params;
 
