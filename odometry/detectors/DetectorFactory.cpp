@@ -2,6 +2,7 @@
 #include "ORBDetector.h"
 #include "SIFTDetector.h"
 #include "SuperPointDetector.h"
+#include "ALIKEDDetector.h"
 #include <iostream>
 
 std::unique_ptr<IFeatureDetector> DetectorFactory::create(const OdometryConfig& config) {
@@ -14,6 +15,11 @@ std::unique_ptr<IFeatureDetector> DetectorFactory::create(const OdometryConfig& 
     if (config.detector_type == "SuperPoint") {
         std::cout << "[DetectorFactory] Instantiating SuperPointDetector." << std::endl;
         return std::make_unique<SuperPointDetector>(config);
+    }
+    
+    else if (config.detector_type == "ALIKED") { 
+        std::cout << "[DetectorFactory] Instantiating ALIKEDDetector via ONNX." << std::endl;
+        return std::make_unique<ALIKEDDetector>(config);
     }
     
     // Default fallback

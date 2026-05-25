@@ -11,6 +11,7 @@
 #include "pose_estimators/IPoseEstimator.h"
 #include "scale_estimators/IScaleEstimator.h"
 #include "integrators/ITrajectoryIntegrator.h"
+#include "LocalBundleAdjustment.h"
 
 class OdometryPipeline {
 private:
@@ -31,8 +32,17 @@ private:
     std::unique_ptr<IPoseEstimator> pose_estimator;
     std::unique_ptr<IScaleEstimator> scale_estimator;
     std::unique_ptr<ITrajectoryIntegrator> integrator;
+    
+    std::unique_ptr<LocalBundleAdjustment> lba_;
+    int current_frame_id_ = 0;
+
+    int next_track_id_ = 0;
+    std::vector<int> prev_track_ids_; // Stores the IDs of the keypoints in the previous frame
+      
 
 public:
+    ~OdometryPipeline();
+
     static std::unique_ptr<OdometryPipeline> build(const OdometryConfig& config);
 
     OdometryPipeline(const OdometryConfig& cfg,

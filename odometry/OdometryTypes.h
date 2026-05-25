@@ -81,7 +81,10 @@ struct OdometryConfig {
     std::string matcher_type = "FLANN"; 
 
     int num_threads = 1; // <-- NEW: Global thread limit
-
+    
+    bool use_local_ba = false;
+    int lba_window_size = 10;
+    
     BucketingConfig bucketing_params;
 
     std::map<std::string, float> detector_params;

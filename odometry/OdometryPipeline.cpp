@@ -35,6 +35,19 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
       integrator(std::move(i)),
       is_first_frame(true) 
 {
+    if (config.use_local_ba) {
+        // 1. Construct the K matrix from your config variables
+        cv::Mat K = (cv::Mat_<double>(3, 3) << 
+            config.intrinsics.fx, 0.0, config.intrinsics.cx,
+            0.0, config.intrinsics.fy, config.intrinsics.cy,
+            0.0, 0.0, 1.0);
+
+        // 2. Pass it to the LBA constructor alongside the window size
+        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_window_size);
+
+        lba_->start(); // Spin up the parallel optimization thread
+    }
+
     std::cout << "[OdometryPipeline] Pipeline successfully assembled and ready." << std::endl;
 }
 
@@ -71,6 +84,13 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
     t1 = std::chrono::high_resolution_clock::now();
     metrics.time_match_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
+    // --- NEW: Create the index map for the LBA backend ---
+    // Map format: current_point_index -> previous_point_index
+    std::vector<int> matched_prev_idx(curr_keypoints.size(), -1);
+    for (const auto& match : good_matches) {
+        matched_prev_idx[match.trainIdx] = match.queryIdx;
+    }
+
     // Translate DMatch indices to 2D geometric points
     std::vector<cv::Point2f> pts_prev;
     std::vector<cv::Point2f> pts_curr;
@@ -101,16 +121,13 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         float cell_w = static_cast<float>(width) / cols;
         float cell_h = static_cast<float>(height) / rows;
 
-        // Subtle Blue color for the grid lines (OpenCV uses BGR)
         cv::Scalar grid_color(255, 50, 50); 
 
-        // Draw vertical lines
+        // Draw vertical & horizontal lines
         for (int i = 1; i < cols; ++i) {
             int x = static_cast<int>(i * cell_w);
             cv::line(color_frame, cv::Point(x, 0), cv::Point(x, height), grid_color, 1, cv::LINE_AA);
         }
-
-        // Draw horizontal lines
         for (int i = 1; i < rows; ++i) {
             int y = static_cast<int>(i * cell_h);
             cv::line(color_frame, cv::Point(0, y), cv::Point(width, y), grid_color, 1, cv::LINE_AA);
@@ -119,12 +136,11 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
     // 2. Draw the Feature Tracks
     for (size_t i = 0; i < pts_curr.size(); i++) {
-        // Red line from old to new, Green dot at current position
         cv::line(color_frame, pts_prev[i], pts_curr[i], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         cv::circle(color_frame, pts_curr[i], 3, cv::Scalar(0, 255, 0), -1, cv::LINE_AA);
     }
     
-    debug_frame = color_frame; // Save to be fetched by main
+    debug_frame = color_frame; 
 
     // 3. Pose Recovery
     t0 = std::chrono::high_resolution_clock::now();
@@ -143,7 +159,35 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
             prev_image = frame;
             prev_descriptors = curr_descriptors;
             prev_keypoints = curr_keypoints;
+            
+            // --- UPDATED LBA HANDOFF ---
+            if (lba_ && !R.empty() && !t.empty()) {
+                BAFrame new_frame;
+                new_frame.frame_id = current_frame_id_;
+            
+                // REMEMBER: Always .clone() to prevent cross-thread memory corruption!
+                new_frame.R = R.clone(); 
+                new_frame.t = t.clone() * scale; // Apply the scale factor before sending to LBA
+           
+                // Pass the raw 2D points and their index mapping to the previous frame
+                std::vector<cv::Point2f> curr_pts;
+                cv::KeyPoint::convert(curr_keypoints, curr_pts);
+                new_frame.points2D = curr_pts;
+                new_frame.matched_prev_idx = matched_prev_idx;
+            
+                lba_->pushFrame(new_frame);
+            }
+
+            if (lba_) {
+                cv::Mat T_correction;
+                if (lba_->getCorrection(T_correction)) {
+                    integrator->applyCorrection(T_correction);
+                    // std::cout << "[Pipeline] Applied asynchronous LBA drift correction." << std::endl;
+                }
+            }
         }
+        
+        current_frame_id_++;
     }
 
     gt_prev = current_gt;
@@ -163,7 +207,11 @@ cv::Mat OdometryPipeline::getGlobalTransformVIO() const {
 }
 
 bool OdometryPipeline::isTrackingActive() const {
-    // Determine active tracking state based on non-identity VO matrices
-    // or you could expose a specific flag from the integrator if desired.
     return !is_first_frame; 
+}
+
+OdometryPipeline::~OdometryPipeline() {
+    if (lba_) {
+        lba_->stop();
+    }
 }

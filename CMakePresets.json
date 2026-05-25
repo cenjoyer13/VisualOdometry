@@ -1,0 +1,16 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "release-optimized",
+      "displayName": "Release with Optimizations",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS": "-O3 -march=native -ffast-math",
+        "CMAKE_C_FLAGS": "-O3 -march=native -ffast-math"
+      }
+    }
+  ]
+}

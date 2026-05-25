@@ -17,6 +17,8 @@ public:
     explicit DualPathIntegrator(const OdometryConfig& cfg);
     ~DualPathIntegrator() override = default;
 
+    void applyCorrection(const cv::Mat& T_correction) override;
+
     void integrate(const cv::Mat& local_R, 
                    const cv::Mat& local_t, 
                    double scale, 

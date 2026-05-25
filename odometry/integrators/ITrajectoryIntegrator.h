@@ -6,6 +6,10 @@ class ITrajectoryIntegrator {
 public:
     virtual ~ITrajectoryIntegrator() = default;
 
+    //applies a correction transformation (from LBA) to the current global pose estimates
+    virtual void applyCorrection(const cv::Mat& T_correction) = 0;
+
+    //integrate a new relative pose measurement (R,t) with the given scale and IMU orientation into the global trajectory
     virtual void integrate(const cv::Mat& local_R, 
                            const cv::Mat& local_t, 
                            double scale, 

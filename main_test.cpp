@@ -135,6 +135,12 @@ int main(int argc, char** argv) {
         config.bucketing_params.max_features_per_bucket = (int)fs["bucketing"]["max_features_per_bucket"];
     }
     
+    // Inside your config parser function
+    if (!fs["local_bundle_adjustment"].empty()) {
+        config.use_local_ba = (int)fs["local_bundle_adjustment"]["enabled"] != 0;
+        config.lba_window_size = (int)fs["local_bundle_adjustment"]["window_size"];
+    }
+    
     // --- NEW: PARSE THREAD LIMIT ---
     if (!fs["system"]["num_threads"].empty()) {
         config.num_threads = (int)fs["system"]["num_threads"];

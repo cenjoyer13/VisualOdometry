@@ -4,6 +4,12 @@ project(OdometryKittiTest LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
+add_compile_definitions(EIGEN_DONT_ALIGN_STATICALLY EIGEN_DONT_VECTORIZE)
+
 # --- FIND OPENCV 4.8.0 ---
 find_package(OpenCV 4.8.0 REQUIRED)
 message(STATUS "Found OpenCV: ${OpenCV_VERSION} at ${OpenCV_DIR}")
@@ -23,6 +29,10 @@ if(NOT ONNXRUNTIME_LIB)
     message(FATAL_ERROR "Could not find libonnxruntime.so in ${ONNXRUNTIME_DIR}/lib!")
 endif()
 
+# --- FIND GTSAM ---
+find_package(GTSAM REQUIRED)
+include_directories(${GTSAM_INCLUDE_DIR})
+
 # --- GATHER ODOMETRY SOURCE FILES ---
 file(GLOB_RECURSE SRC_ODOMETRY "odometry/*.cpp")
 
@@ -35,6 +45,7 @@ add_executable(KittiEvaluator
 target_link_libraries(KittiEvaluator PRIVATE 
     ${OpenCV_LIBS}
     ${ONNXRUNTIME_LIB}
+    gtsam
 )
 
 # --- BURN RPATHS INTO BINARY ---

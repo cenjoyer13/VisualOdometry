@@ -28,6 +28,12 @@ cv::Mat DualPathIntegrator::eulerToRotationMatrix(const cv::Vec3f& euler) const 
     return R_z * R_y * R_x;
 }
 
+void DualPathIntegrator::applyCorrection(const cv::Mat& T_correction) {
+    // Pre-multiply the accumulated pose by the correction delta
+    T_VO = T_VO * T_correction;
+    T_VIO = T_correction * T_VIO;
+}
+
 void DualPathIntegrator::integrate(const cv::Mat& local_R, const cv::Mat& local_t, double scale, const cv::Vec3f& imu_orientation) {
     // 1. Ensure inputs are CV_64F for matrix multiplication precision
     cv::Mat R_64, t_64;
