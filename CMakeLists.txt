@@ -1,61 +1,97 @@
-cmake_minimum_required(VERSION 3.18) 
-project(OdometryKittiTest LANGUAGES CXX) 
+cmake_minimum_required(VERSION 3.18)
+project(OdometryKittiTest LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
-
-# Eigen ABI safety vs GTSAM.
-# The installed libgtsam.so was built with GTSAM_BUILD_WITH_MARCH_NATIVE=OFF, so
-# its compiled code lays out fixed-size Eigen types (Pose3, Matrix4d, Cal3_S2,
-# Values entries, ...) with the SSE default of 16-byte alignment.
-# Our code is compiled with -march=native (see CMakePresets.json / cache),
-# which on an AVX-capable CPU makes Eigen bump that alignment to 32 bytes.
-# The two halves then agree on type names but disagree on size/alignment, and
-# the first runOptimization() call corrupts the heap with
-#   "double free or corruption (out)"
-# exactly when the LBA window fills (frame == lba_window_size).
-#
-# Fix without giving up -march=native / -ffast-math: cap Eigen's *struct*
-# alignment at 16 bytes so its types match GTSAM's compiled layout. Eigen
-# still uses AVX for arithmetic — it just emits unaligned loads/stores where
-# necessary, which is the layout GTSAM itself was compiled against.
-add_compile_definitions(
-    EIGEN_DONT_VECTORIZE
-)
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-# --- FIND OPENCV 4.8.0 ---
-find_package(OpenCV 4.8.0 REQUIRED)
-message(STATUS "Found OpenCV: ${OpenCV_VERSION} at ${OpenCV_DIR}")
+# =========================================================================
+# Eigen ABI safety vs GTSAM.
+#
+# A pre-built libgtsam.so / gtsam.lib compiled without -march=native lays out
+# fixed-size Eigen types (Pose3, Matrix4d, Cal3_S2, Values entries, ...) with
+# the SSE default of 16-byte alignment. Our code with -march=native on an
+# AVX-capable CPU otherwise bumps Eigen's struct alignment to 32 bytes; the
+# two halves agree on type names but disagree on size/alignment, and the
+# first runOptimization() call corrupts the heap.
+#
+# EIGEN_DONT_VECTORIZE pins Eigen's struct alignment to 16 bytes so its types
+# match GTSAM's compiled layout. Eigen still uses AVX for arithmetic — it
+# just emits unaligned loads/stores where necessary, which is the layout
+# GTSAM itself was compiled against.
+# =========================================================================
+add_compile_definitions(EIGEN_DONT_VECTORIZE)
 
-# --- OPENCV CUDA DISABLED ---
-# We intentionally do not define HAS_CUDA here. 
-# This prevents OpenCV from looking for missing contrib headers.
-# LightGlue will still run on the GPU via ONNX Runtime's independent CUDA engine!
-message(STATUS "OpenCV CUDA modules disabled. Neural Network CUDA enabled via ONNX.")
-
-# --- ONNX RUNTIME SETUP (STRICT ABSOLUTE PATH) ---
-set(ONNXRUNTIME_DIR "/usr/local/onnxruntime")
-include_directories(${ONNXRUNTIME_DIR}/include)
-
-find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
-if(NOT ONNXRUNTIME_LIB)
-    message(FATAL_ERROR "Could not find libonnxruntime.so in ${ONNXRUNTIME_DIR}/lib!")
+# =========================================================================
+# Compile flag profile.
+#
+# GCC/Clang: -O3 -march=native -ffast-math comes from CMakePresets.json
+# (preset: release-optimized on Linux, windows-msvc-release on Windows).
+# MSVC: /O2 /fp:fast /arch:AVX2 — same intent, MSVC syntax.
+# =========================================================================
+if(MSVC)
+    add_compile_options(/W3 /permissive- /Zc:__cplusplus)
+    # AirSim + ONNX headers tend to emit -Wstrict-aliasing-style noise that's
+    # not actionable from our side; keep warnings on but don't escalate.
 endif()
 
-# --- FIND GTSAM ---
+# =========================================================================
+# OpenCV (>= 4.8.0)
+# =========================================================================
+find_package(OpenCV 4.8.0 REQUIRED)
+message(STATUS "Found OpenCV: ${OpenCV_VERSION} at ${OpenCV_DIR}")
+message(STATUS "OpenCV CUDA modules intentionally disabled. ONNX Runtime owns GPU inference.")
+
+# =========================================================================
+# ONNX Runtime — platform-aware lookup.
+#
+# Linux/macOS default: /usr/local/onnxruntime (install convention used here).
+# Windows: -DONNXRUNTIME_DIR=C:/path/to/onnxruntime-win-x64-gpu-1.18.1 must
+# be passed; we fail loudly otherwise.
+# =========================================================================
+if(WIN32)
+    set(ONNXRUNTIME_DIR "" CACHE PATH "Path to ONNX Runtime install (release ZIP root)")
+    if(NOT ONNXRUNTIME_DIR)
+        message(FATAL_ERROR
+            "ONNXRUNTIME_DIR not set. Download an ONNX Runtime GPU release "
+            "(https://github.com/microsoft/onnxruntime/releases) and configure with "
+            "-DONNXRUNTIME_DIR=C:/path/to/onnxruntime-win-x64-gpu-<version>")
+    endif()
+else()
+    set(ONNXRUNTIME_DIR "/usr/local/onnxruntime" CACHE PATH "Path to ONNX Runtime install")
+endif()
+
+include_directories(${ONNXRUNTIME_DIR}/include)
+
+if(WIN32)
+    find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
+else()
+    find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
+endif()
+
+if(NOT ONNXRUNTIME_LIB)
+    message(FATAL_ERROR "Could not find ONNX Runtime library in ${ONNXRUNTIME_DIR}/lib")
+endif()
+message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIB}")
+
+# =========================================================================
+# GTSAM
+# =========================================================================
 find_package(GTSAM REQUIRED)
 include_directories(${GTSAM_INCLUDE_DIR})
 
-# --- GATHER ODOMETRY SOURCE FILES ---
-file(GLOB_RECURSE SRC_ODOMETRY "odometry/*.cpp")
+# =========================================================================
+# Odometry source library (shared by every executable target)
+# =========================================================================
+file(GLOB_RECURSE SRC_ODOMETRY CONFIGURE_DEPENDS "odometry/*.cpp")
 
-# --- BUILD EXECUTABLE ---
+# =========================================================================
+# KittiEvaluator — portable (Linux + Windows).
+# Replays a KITTI sequence through the pipeline. No AirSim dependency.
+# =========================================================================
 add_executable(KittiEvaluator
     main_test.cpp
     ${SRC_ODOMETRY}
@@ -65,20 +101,24 @@ target_link_libraries(KittiEvaluator PRIVATE
     ${OpenCV_LIBS}
     ${ONNXRUNTIME_LIB}
     gtsam
-    ${CMAKE_DL_LIBS}
+    ${CMAKE_DL_LIBS}     # libdl on Unix, empty on Windows
 )
 
-# --- BURN RPATHS INTO BINARY ---
-# We use $ORIGIN/.. to make the path relative to your build/ directory,
-# ensuring it always finds the cuda12_libs folder in your project root!
-set_target_properties(KittiEvaluator PROPERTIES INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs")
-set_target_properties(KittiEvaluator PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
+if(UNIX)
+    # RPATH: lets the binary find libonnxruntime.so and the bundled cuda12_libs
+    # without LD_LIBRARY_PATH gymnastics. $ORIGIN/.. = repo root from build/.
+    set_target_properties(KittiEvaluator PROPERTIES
+        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs"
+        BUILD_WITH_INSTALL_RPATH TRUE)
+endif()
 
 # =========================================================================
-# AirSim-dependent targets: PathRecorder + PathPlayer
-# Both require AirSim headers and libs. Configure with:
-#   cmake -DAIRSIM_ROOT=/path/to/AirSim ...
-# (or set AIRSIM_INCLUDE_DIRS / AIRSIM_LIBS directly to override the defaults)
+# AirSim-dependent targets: PathRecorder + PathPlayer + FreeplayDrone.
+#
+# All three use Win32 APIs (GetAsyncKeyState, VK_* constants) and AirSim
+# RPC. They are gated on (WIN32 AND AIRSIM_*). Configure with:
+#   cmake -DAIRSIM_ROOT=C:/path/to/AirSim ...
+# or set AIRSIM_INCLUDE_DIRS / AIRSIM_LIBS directly to override defaults.
 # =========================================================================
 set(AIRSIM_ROOT "" CACHE PATH "Path to AirSim repository root")
 set(AIRSIM_INCLUDE_DIRS "" CACHE STRING "Explicit AirSim include dirs (overrides AIRSIM_ROOT defaults)")
@@ -107,12 +147,12 @@ if(AIRSIM_ROOT AND NOT AIRSIM_LIBS)
     endif()
 endif()
 
-if(AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
-    message(STATUS "AirSim integration enabled.")
+if(WIN32 AND AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
+    message(STATUS "AirSim integration enabled — building PathRecorder, PathPlayer, FreeplayDrone.")
     message(STATUS "  Includes: ${AIRSIM_INCLUDE_DIRS}")
     message(STATUS "  Libs:     ${AIRSIM_LIBS}")
 
-    # -- PathRecorder: connects to AirSim, lets user fly, records trajectory --
+    # ----- PathRecorder: WASD flight in AirSim, logs GT trajectory CSV -----
     add_executable(PathRecorder main_recorder.cpp)
     target_include_directories(PathRecorder PRIVATE ${AIRSIM_INCLUDE_DIRS})
     target_link_libraries(PathRecorder PRIVATE
@@ -120,7 +160,7 @@ if(AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
         ${AIRSIM_LIBS}
     )
 
-    # -- PathPlayer: replays a trajectory with the odometry pipeline running --
+    # ----- PathPlayer: replays a CSV trajectory with the odometry pipeline -----
     add_executable(PathPlayer
         main_player.cpp
         ${SRC_ODOMETRY}
@@ -133,10 +173,25 @@ if(AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
         ${AIRSIM_LIBS}
         ${CMAKE_DL_LIBS}
     )
-    set_target_properties(PathPlayer PROPERTIES
-        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs"
-        BUILD_WITH_INSTALL_RPATH TRUE)
+
+    # ----- FreeplayDrone: interactive WASD flight + live odometry + CSV log -----
+    add_executable(FreeplayDrone
+        main.cpp
+        core/DroneWorker.cpp
+        ${SRC_ODOMETRY}
+    )
+    target_include_directories(FreeplayDrone PRIVATE ${AIRSIM_INCLUDE_DIRS})
+    target_link_libraries(FreeplayDrone PRIVATE
+        ${OpenCV_LIBS}
+        ${ONNXRUNTIME_LIB}
+        gtsam
+        ${AIRSIM_LIBS}
+        ${CMAKE_DL_LIBS}
+    )
 else()
-    message(STATUS "AirSim not configured -- skipping PathRecorder and PathPlayer.")
-    message(STATUS "  Pass -DAIRSIM_ROOT=<AirSim repo root> (or set AIRSIM_INCLUDE_DIRS / AIRSIM_LIBS) to build them.")
+    if(NOT WIN32)
+        message(STATUS "AirSim targets skipped: PathRecorder / PathPlayer / FreeplayDrone are Win32-only.")
+    else()
+        message(STATUS "AirSim targets skipped: pass -DAIRSIM_ROOT=<repo root> to enable.")
+    endif()
 endif()

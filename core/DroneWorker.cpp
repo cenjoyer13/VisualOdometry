@@ -41,20 +41,16 @@ void runDroneLogic(SharedContext* ctx) {
         client.armDisarm(true);
         client.takeoffAsync()->waitOnLastTask();
 
-        // 1. Initialize our Odometry Pipeline via Configuration
-        OdometryConfig config;
-        config.backend = ComputeBackend::CPU; // Change to CUDA or OPENCL as needed
-        config.intrinsics = {320.0f, 320.0f, 320.0f, 240.0f}; // Example AirSim defaults (update to your camera)
-        
-        auto pipeline = OdometryPipeline::build(config);
+        // Build the odometry pipeline from the YAML-loaded config provided
+        // by main().
+        auto pipeline = OdometryPipeline::build(ctx->config);
 
-        // 2. Setup Logging (Removed YOLO columns)
-        std::ofstream log_file("flight_log.csv");
+        std::ofstream log_file(ctx->log_path);
         log_file << "Time_s,FPS,Global_X_VO,Global_Y_VO,Global_Z_VO,Pitch_VO,Roll_VO,Yaw_VO,"
                  << "Global_X_VIO,Global_Y_VIO,Global_Z_VIO,Pitch_VIO,Roll_VIO,Yaw_VIO,"
                  << "True_X,True_Y,True_Z\n";
-                 
-        std::cout << "[WORKER] System started. Recording data to flight_log.csv..." << std::endl;
+
+        std::cout << "[WORKER] System started. Recording data to " << ctx->log_path << "..." << std::endl;
 
         auto start_time = std::chrono::steady_clock::now();
         auto last_cmd_time = std::chrono::steady_clock::now();

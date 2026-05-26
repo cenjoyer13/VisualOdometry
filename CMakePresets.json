@@ -3,14 +3,50 @@
   "configurePresets": [
     {
       "name": "release-optimized",
-      "displayName": "Release with Optimizations",
+      "displayName": "Release with Optimizations (Linux / GCC)",
       "generator": "Unix Makefiles",
       "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "notEquals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_FLAGS": "-O3 -march=native -ffast-math",
-        "CMAKE_C_FLAGS": "-O3 -march=native -ffast-math"
+        "CMAKE_C_FLAGS":   "-O3 -march=native -ffast-math"
       }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Release with Optimizations (Windows / MSVC)",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS_RELEASE": "/O2 /Ob2 /DNDEBUG /fp:fast /arch:AVX2",
+        "CMAKE_C_FLAGS_RELEASE":   "/O2 /Ob2 /DNDEBUG /fp:fast /arch:AVX2"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "release-optimized",
+      "configurePreset": "release-optimized"
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc-release",
+      "configuration": "Release"
     }
   ]
 }

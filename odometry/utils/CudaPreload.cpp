@@ -1,5 +1,13 @@
 #include "CudaPreload.h"
 
+#ifndef __linux__
+// Non-Linux platforms: ONNX Runtime resolves CUDA libs through the OS loader
+// search (PATH on Windows, DYLD_LIBRARY_PATH on macOS) without needing the
+// process-internal preload dance Linux requires for libcudnn's lazy sibling
+// loads. init() is a no-op here.
+void CudaPreload::init(bool /*verbose*/) {}
+#else
+
 #include <dlfcn.h>
 #include <unistd.h>
 #include <climits>
@@ -91,3 +99,5 @@ void CudaPreload::init(bool verbose) {
                   << "\n";
     }
 }
+
+#endif  // __linux__
