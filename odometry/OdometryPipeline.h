@@ -55,7 +55,6 @@ public:
     void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt);
 
     cv::Mat getGlobalTransformVO() const;
-    cv::Mat getGlobalTransformVIO() const;
     bool isTrackingActive() const;
 
     // --- NEW: Accessors ---

@@ -33,24 +33,6 @@ static bool isKeyPressed(int key) {
     return (GetAsyncKeyState(key) & 0x8000) != 0;
 }
 
-static void extractEulerFromMatrix(const cv::Mat& T, float& pitch, float& roll, float& yaw) {
-    if (T.empty()) { pitch = roll = yaw = 0; return; }
-    double m00 = T.at<double>(0,0), m01 = T.at<double>(0,1);
-    double m10 = T.at<double>(1,0), m11 = T.at<double>(1,1);
-    double m20 = T.at<double>(2,0), m21 = T.at<double>(2,1), m22 = T.at<double>(2,2);
-    float sy = std::sqrt(m00 * m00 + m10 * m10);
-    bool singular = sy < 1e-6f;
-    if (!singular) {
-        pitch = std::asin(-m20);
-        roll  = std::atan2(m21, m22);
-        yaw   = std::atan2(m10, m00);
-    } else {
-        pitch = std::asin(-m20);
-        roll  = 0;
-        yaw   = std::atan2(-m01, m11);
-    }
-}
-
 static void quatToEuler(float qw, float qx, float qy, float qz,
                         float& pitch, float& roll, float& yaw) {
     float sinr_cosp = 2.0f * (qw * qx + qy * qz);
@@ -167,8 +149,7 @@ int main(int argc, char** argv) {
     log << std::fixed << std::setprecision(6);
     log << "time_s,fps,"
         << "gt_x,gt_y,gt_z,gt_pitch,gt_roll,gt_yaw,"
-        << "vo_x,vo_y,vo_z,vo_pitch,vo_roll,vo_yaw,"
-        << "vio_x,vio_y,vio_z,vio_pitch,vio_roll,vio_yaw\n";
+        << "vo_x,vo_y,vo_z\n";
 
     RealTime2DTrajectory trajectory_visualizer(0.5f);
 
@@ -243,20 +224,13 @@ int main(int argc, char** argv) {
                 pipeline->processFrame(buf, current_gt);
             }
 
-            // --- VO / VIO state ---
-            float vo_x = 0, vo_y = 0, vo_z = 0, vo_p = 0, vo_r = 0, vo_y_ang = 0;
-            float vio_x = 0, vio_y = 0, vio_z = 0, vio_p = 0, vio_r = 0, vio_y_ang = 0;
+            // --- VO state ---
+            float vo_x = 0, vo_y = 0, vo_z = 0;
             if (pipeline->isTrackingActive()) {
-                cv::Mat T_VO  = pipeline->getGlobalTransformVO();
-                cv::Mat T_VIO = pipeline->getGlobalTransformVIO();
+                cv::Mat T_VO = pipeline->getGlobalTransformVO();
                 vo_x = T_VO.at<double>(0, 3);
                 vo_y = T_VO.at<double>(1, 3);
                 vo_z = T_VO.at<double>(2, 3);
-                extractEulerFromMatrix(T_VO, vo_p, vo_r, vo_y_ang);
-                vio_x = T_VIO.at<double>(0, 3);
-                vio_y = T_VIO.at<double>(1, 3);
-                vio_z = T_VIO.at<double>(2, 3);
-                extractEulerFromMatrix(T_VIO, vio_p, vio_r, vio_y_ang);
             }
 
             // --- Visualization ---
@@ -282,9 +256,7 @@ int main(int argc, char** argv) {
             log << t_s << "," << fps << ","
                 << current_gt.position[0] << "," << current_gt.position[1] << "," << current_gt.position[2] << ","
                 << gt_pitch << "," << gt_roll << "," << gt_yaw << ","
-                << vo_x << "," << vo_y << "," << vo_z << "," << vo_p << "," << vo_r << "," << vo_y_ang << ","
-                << vio_x << "," << vio_y << "," << vio_z << "," << vio_p << "," << vio_r << "," << vio_y_ang
-                << "\n";
+                << vo_x << "," << vo_y << "," << vo_z << "\n";
 
             const PipelineMetrics& m = pipeline->getMetrics();
             printf("\r[%04d] Det:%4.0fms Mat:%4.0fms Pos:%3.0fms Tot:%4.0fms FPS:%4.1f   ",

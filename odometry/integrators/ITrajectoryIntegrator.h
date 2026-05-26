@@ -20,12 +20,11 @@ public:
     // Returns false if the snapshot is unavailable (correction is dropped).
     virtual bool applyCorrection(uint64_t frame_id, const cv::Mat& T_world_optimized) = 0;
 
-    // Integrate a new relative pose measurement (R,t) with the given scale and
-    // IMU orientation into the global trajectory.
+    // Integrate a new relative pose measurement (R, t) with the given scale
+    // into the global trajectory.
     virtual void integrate(const cv::Mat& local_R,
                            const cv::Mat& local_t,
-                           double scale,
-                           const cv::Vec3f& imu_orientation) = 0;
+                           double scale) = 0;
 
     // Returns a 4x4 cv::Mat (CV_64F) representing the full pose:
     // [ R11 R12 R13 tx ]
@@ -33,5 +32,4 @@ public:
     // [ R31 R32 R33 tz ]
     // [  0   0   0   1 ]
     virtual cv::Mat getGlobalTransformVO() const = 0;
-    virtual cv::Mat getGlobalTransformVIO() const = 0;
 };

@@ -148,7 +148,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
     if (pose_success) {
         double scale = scale_estimator->updateScale(gt_prev, current_gt);
-        integrator->integrate(R, t, scale, current_gt.orientation);
+        integrator->integrate(R, t, scale);
 
         // Phase 3: push every frame to LBA so prev_frame_track_ids_ stays in
         // sync with the frontend's match indexing. Stationary frames are
@@ -206,10 +206,6 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
 cv::Mat OdometryPipeline::getGlobalTransformVO() const {
     return integrator->getGlobalTransformVO();
-}
-
-cv::Mat OdometryPipeline::getGlobalTransformVIO() const {
-    return integrator->getGlobalTransformVIO();
 }
 
 bool OdometryPipeline::isTrackingActive() const {
