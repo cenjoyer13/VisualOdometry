@@ -1,5 +1,55 @@
+# --- Build outputs --------------------------------------------------------
 build/
+build-*/
+out/
+cmake-build-*/
+
+# CMake byproducts that can leak outside the build dir
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+_deps/
+
+# Compiled artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+*.exp
+*.pdb
+*.ilk
+
+# --- Runtime / data --------------------------------------------------------
+# Bundled cuDNN + CUDA libs (local platform setup, not portable)
 cuda12_libs/
+
+# Per-run logs / outputs
+kitti_trajectory.csv
+playback_log.csv
+freeplay_log.csv
+flight_log.csv
+flight_path.csv
+pred_tum.txt
+
+# --- Editor / IDE ----------------------------------------------------------
 .vscode/
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS junk ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Project-local notes ---------------------------------------------------
 OdometryProject.txt
 CLAUDE.md

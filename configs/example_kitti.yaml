@@ -1,0 +1,49 @@
+%YAML:1.0
+# Example odometry config for KittiEvaluator.
+#
+# Edit dataset.root_path to point at your KITTI odometry dataset root
+# (the directory that contains sequences/ and poses/).
+# The camera block holds the rectified gray cam intrinsics for KITTI Seq 00;
+# adjust if you switch sequences.
+
+dataset:
+  root_path: /path/to/KITTI/data_odometry_gray/dataset
+  sequence: '00'
+
+camera:
+  fx: 718.856
+  fy: 718.856
+  cx: 607.192
+  cy: 185.215
+
+detector:
+  type: SIFT
+  SIFT:
+    nfeatures: 450
+    nOctaveLayers: 3
+    contrastThreshold: 0.04
+    edgeThreshold: 10
+    sigma: 1.6
+
+matcher:
+  type: FLANN
+  distance_ratio: 0.75
+  FLANN:
+    kdTrees: 5
+    searchChecks: 50
+
+bucketing:
+  enabled: 1
+  grid_cols: 6
+  grid_rows: 3
+  max_features_per_bucket: 30
+
+local_bundle_adjustment:
+  enabled: 1
+  window_size: 10
+  opt_stride: 2
+
+system:
+  backend: CPU
+  num_threads: 8
+  verbose: 0
