@@ -11,6 +11,8 @@
 #include <unordered_map>
 #include <cstdint>
 
+#include "OdometryTypes.h"
+
 struct BAFrame {
     uint64_t frame_id = 0;
 
@@ -48,7 +50,7 @@ struct BACorrection {
 
 class LocalBundleAdjustment {
 public:
-    explicit LocalBundleAdjustment(const cv::Mat& K, int window_size = 10, int opt_stride = 2);
+    LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params, bool verbose = false);
     ~LocalBundleAdjustment();
 
     void start();
@@ -61,7 +63,8 @@ private:
     void optimizationLoop();
     void runOptimization();
 
-    int window_size_;
+    LBAParams params_;
+    bool verbose_ = false;
     cv::Mat K_;
 
     std::thread ba_thread_;
@@ -80,7 +83,6 @@ private:
     int64_t next_track_id_ = 0;
     std::vector<int64_t> prev_frame_track_ids_;
 
-    int opt_stride_;
     int frames_since_last_opt_ = 0;
 
     std::unordered_map<int64_t, int> active_landmarks_;

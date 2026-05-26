@@ -17,11 +17,14 @@
 
 using gtsam::symbol_shorthand::X;
 
-LocalBundleAdjustment::LocalBundleAdjustment(const cv::Mat& K, int window_size, int opt_stride)
-    : window_size_(window_size),
+LocalBundleAdjustment::LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params, bool verbose)
+    : params_(params),
+      verbose_(verbose),
       K_(K.clone()),
-      is_running_(false),
-      opt_stride_(opt_stride > 0 ? opt_stride : 1) {}
+      is_running_(false) {
+    if (params_.opt_stride <= 0) params_.opt_stride = 1;
+    if (params_.window_size <= 0) params_.window_size = 1;
+}
 
 LocalBundleAdjustment::~LocalBundleAdjustment() { stop(); }
 
@@ -65,14 +68,14 @@ void LocalBundleAdjustment::optimizationLoop() {
             local_window_.push_back(current_frame);
             frames_since_last_opt_++;
 
-            if (local_window_.size() > static_cast<size_t>(window_size_)) {
+            if (local_window_.size() > static_cast<size_t>(params_.window_size)) {
                 pruneOutdatedTracks(local_window_.front());
                 local_window_.erase(local_window_.begin());
             }
         }
 
-        if (local_window_.size() == static_cast<size_t>(window_size_) &&
-            frames_since_last_opt_ >= opt_stride_) {
+        if (local_window_.size() == static_cast<size_t>(params_.window_size) &&
+            frames_since_last_opt_ >= params_.opt_stride) {
             runOptimization();
             frames_since_last_opt_ = 0;
         }
@@ -183,7 +186,7 @@ void LocalBundleAdjustment::runOptimization() {
     // 2. Anchor the oldest frame in the window with a tight prior at its
     //    initial value. This pins the gauge.
     {
-        auto priorNoise = gtsam::noiseModel::Isotropic::Sigma(6, 1e-4);
+        auto priorNoise = gtsam::noiseModel::Isotropic::Sigma(6, params_.anchor_prior_sigma);
         graph.addPrior(X(0), cvMatToPose3(local_window_[0].T_world), priorNoise);
     }
 
@@ -194,13 +197,13 @@ void LocalBundleAdjustment::runOptimization() {
     //     a total shift of Δ, so the chi-squared cost of meter-scale window
     //     drift is small and easily paid for by a slight SmartFactor
     //     reduction. The right way to cap cumulative drift is an anchor at
-    //     the newest pose. σ_t=0.20m allows 10-20cm refinements (the actual
-    //     scale of VO drift over a 10-frame window) but penalizes the 0.5-1m
-    //     corrections we were publishing.
+    //     the newest pose.
     {
         const size_t last = local_window_.size() - 1;
+        const double rs = params_.end_prior_rot_sigma;
+        const double ts = params_.end_prior_trans_sigma;
         gtsam::Vector6 endSigmas;
-        endSigmas << 0.02, 0.02, 0.02, 0.20, 0.20, 0.20;
+        endSigmas << rs, rs, rs, ts, ts, ts;
         auto endNoise = gtsam::noiseModel::Diagonal::Sigmas(endSigmas);
         graph.addPrior(X(last), cvMatToPose3(local_window_[last].T_world), endNoise);
     }
@@ -208,17 +211,18 @@ void LocalBundleAdjustment::runOptimization() {
     // 3. BetweenFactor chain to lock scale and stabilize the solver when
     //    SmartFactors degenerate. Stationary frames get an identity
     //    measurement; moving frames use the (R,t) from the pose estimator.
-    //    Sigmas: 0.05 rad rotation, 0.10 m translation per axis.
-    // σ_r ≈ 1.1° per axis, σ_t = 5 cm. Note: BetweenFactor alone does NOT
-    // cap the cumulative drift across the window — each factor only sees
-    // ~Δ/W deviation when the chain accumulates Δ. The newest-frame prior
-    // below is what actually caps cumulative drift.
+    //    Note: BetweenFactor alone does NOT cap the cumulative drift across
+    //    the window — each factor only sees ~Δ/W deviation when the chain
+    //    accumulates Δ. The newest-frame prior above is what actually caps
+    //    cumulative drift.
     gtsam::Vector6 betweenSigmas;
-    betweenSigmas << 0.02, 0.02, 0.02, 0.05, 0.05, 0.05;
+    betweenSigmas << params_.between_rot_sigma, params_.between_rot_sigma, params_.between_rot_sigma,
+                     params_.between_trans_sigma, params_.between_trans_sigma, params_.between_trans_sigma;
     auto betweenNoise = gtsam::noiseModel::Diagonal::Sigmas(betweenSigmas);
 
     gtsam::Vector6 stationarySigmas;
-    stationarySigmas << 0.005, 0.005, 0.005, 0.01, 0.01, 0.01;
+    stationarySigmas << params_.stationary_rot_sigma, params_.stationary_rot_sigma, params_.stationary_rot_sigma,
+                        params_.stationary_trans_sigma, params_.stationary_trans_sigma, params_.stationary_trans_sigma;
     auto stationaryNoise = gtsam::noiseModel::Diagonal::Sigmas(stationarySigmas);
 
     int between_count = 0;
@@ -251,18 +255,13 @@ void LocalBundleAdjustment::runOptimization() {
     //    SmartProjectionPoseFactor's HESSIAN linearization Schur-eliminates
     //    the landmark and is incompatible with a per-observation robust
     //    kernel.
-    auto pixelNoise = gtsam::noiseModel::Isotropic::Sigma(2, 1.0);
+    auto pixelNoise = gtsam::noiseModel::Isotropic::Sigma(2, params_.pixel_sigma);
 
     gtsam::SmartProjectionParams smartFactorParams;
     smartFactorParams.setDegeneracyMode(gtsam::DegeneracyMode::ZERO_ON_DEGENERACY);
-    smartFactorParams.setRankTolerance(1e-5);
+    smartFactorParams.setRankTolerance(params_.rank_tolerance);
     smartFactorParams.setEnableEPI(false);
-    // Tightened from 10 px to 3 px: moving objects on KITTI generate tracks
-    // that reproject cleanly within themselves (so they look like good
-    // factors at 1-2 px residual) but disagree with the static-world
-    // landmarks. 3 px ≈ 3σ at σ=1.0 px noise, which is the right cutoff to
-    // separate measurement noise from semantic outliers.
-    smartFactorParams.setDynamicOutlierRejectionThreshold(3.0);
+    smartFactorParams.setDynamicOutlierRejectionThreshold(params_.outlier_threshold);
 
     // Group observations by global track id.
     std::map<int64_t, std::vector<std::pair<int, cv::Point2f>>> feature_tracks;
@@ -277,16 +276,12 @@ void LocalBundleAdjustment::runOptimization() {
     }
 
     int smart_count = 0;
-    constexpr int kMinObs = 4;
-    // Tightened from 15 to 25 px: on KITTI, features near the focus of
-    // expansion (image center, looking forward) have low parallax and bad
-    // depth. Requiring 25 px of in-image motion keeps mostly edge features,
-    // which triangulate reliably.
-    constexpr double kMinBboxDiag = 25.0;
+    const int kMinObs = params_.min_observations;
+    const double kMinBboxDiag = params_.min_bbox_diagonal;
 
     for (const auto& track_pair : feature_tracks) {
         const auto& observations = track_pair.second;
-        if (observations.size() < kMinObs) continue;
+        if (observations.size() < static_cast<size_t>(kMinObs)) continue;
 
         // Pixel-bounding-box diagonal filter rejects tracks that haven't
         // actually translated across the image (parallax-starved landmarks
@@ -342,36 +337,38 @@ void LocalBundleAdjustment::runOptimization() {
         double cos_theta = std::max(-1.0, std::min(1.0, (trace - 1.0) * 0.5));
         double corr_rot_deg = std::acos(cos_theta) * 180.0 / M_PI;
 
-        std::cout << "[LBA] frame=" << local_window_[last_idx].frame_id
-                  << " poses=" << local_window_.size()
-                  << " smart=" << smart_count
-                  << " between=" << between_count
-                  << " err " << err_before << " -> " << err_after
-                  << " corr_t=" << corr_t_norm
-                  << " corr_rot_deg=" << corr_rot_deg
-                  << std::endl;
+        if (verbose_) {
+            std::cout << "[LBA] frame=" << local_window_[last_idx].frame_id
+                      << " poses=" << local_window_.size()
+                      << " smart=" << smart_count
+                      << " between=" << between_count
+                      << " err " << err_before << " -> " << err_after
+                      << " corr_t=" << corr_t_norm
+                      << " corr_rot_deg=" << corr_rot_deg
+                      << std::endl;
+        }
 
-        // Reject under-determined optimizations. With ~50 SmartFactors x ~4 obs
-        // x 2 dim = ~400 measurements against 60 pose unknowns, the system is
-        // barely overdetermined; the optimizer can drive err to machine zero
-        // by shuffling poses freely, producing a meaningless correction
-        // (observed: err 0.327 -> 9e-20 with corr_t = 1.2 m).
-        constexpr int kMinSmartFactors = 50;
-        if (smart_count < kMinSmartFactors) {
-            std::cerr << "[LBA] discarding correction (under-constrained, smart=" << smart_count << ")" << std::endl;
+        // Reject under-determined optimizations. With too few SmartFactors the
+        // optimizer can drive err to machine zero by shuffling poses freely,
+        // producing a meaningless correction.
+        if (smart_count < params_.min_smart_factors) {
+            if (verbose_) {
+                std::cerr << "[LBA] discarding correction (under-constrained, smart="
+                          << smart_count << ")" << std::endl;
+            }
             return;
         }
 
-        // Guard against outlandish jumps that almost always indicate a bad
-        // solution from contaminated tracks. Tightened from 2.0m to 0.5m
-        // now that the X(last) prior caps the optimizer's reach to ~20cm
-        // by construction; anything above 0.5m is overshooting the prior.
-        constexpr double kMaxCorrTranslationM = 0.5;
-        constexpr double kMaxCorrRotationDeg = 5.0;
-        if (corr_t_norm > kMaxCorrTranslationM || corr_rot_deg > kMaxCorrRotationDeg) {
-            std::cerr << "[LBA] discarding correction (out of bounds): "
-                      << "corr_t=" << corr_t_norm
-                      << " corr_rot_deg=" << corr_rot_deg << std::endl;
+        // Guard against outlandish jumps that indicate a bad solution from
+        // contaminated tracks. The X(last) loose prior already caps the
+        // optimizer's reach; these thresholds reject anything overshooting it.
+        if (corr_t_norm > params_.max_correction_translation ||
+            corr_rot_deg > params_.max_correction_rotation_deg) {
+            if (verbose_) {
+                std::cerr << "[LBA] discarding correction (out of bounds): "
+                          << "corr_t=" << corr_t_norm
+                          << " corr_rot_deg=" << corr_rot_deg << std::endl;
+            }
             return;
         }
 

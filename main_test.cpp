@@ -12,6 +12,8 @@
 
 #include "odometry/OdometryPipeline.h"
 #include "odometry/OdometryTypes.h"
+#include "odometry/utils/ConfigLoader.h"
+#include "odometry/utils/CudaPreload.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
 // Math helper: Rotation Matrix to Quaternion
@@ -78,101 +80,54 @@ bool parseKittiPose(const std::string& line, GroundTruthData& gt_data) {
 }
 
 int main(int argc, char** argv) {
-    // Only requires 1 argument now!
     if (argc < 2) {
-        std::cerr << "Usage: ./KittiEvaluator <yaml_config_path>\n";
+        std::cerr << "Usage: ./KittiEvaluator <yaml_config_path> [--debug]\n";
         return -1;
     }
-    
+
     setvbuf(stdout, NULL, _IONBF, 0);
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
-    
-    std::string yaml_file = argv[1];
 
-    // 1. Read YAML Configuration
-    cv::FileStorage fs(yaml_file, cv::FileStorage::READ);
-    if (!fs.isOpened()) {
+    std::string yaml_file;
+    bool cli_debug = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--debug") cli_debug = true;
+        else if (yaml_file.empty()) yaml_file = arg;
+    }
+    if (yaml_file.empty()) {
+        std::cerr << "Usage: ./KittiEvaluator <yaml_config_path> [--debug]\n";
+        return -1;
+    }
+
+    // Defaults — KITTI Seq 00 intrinsics, CPU backend. Anything present in
+    // the YAML overrides these.
+    OdometryConfig config;
+    config.backend = ComputeBackend::CPU;
+    config.intrinsics = {718.856f, 718.856f, 607.192f, 185.215f};
+
+    ConfigLoader loader(yaml_file);
+    if (!loader.isOpen()) {
         std::cerr << "Failed to open YAML file. Did you add '%YAML:1.0' to the top of the file?\n";
         return -1;
     }
+    loader.loadOdometryConfig(config);
+    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose
 
-    OdometryConfig config;
-    config.backend = ComputeBackend::CPU;
-    config.intrinsics = {718.856f, 718.856f, 607.192f, 185.215f}; // KITTI Seq 00
-    
-    // --- PARSE ALGORITHMS ---
-    config.detector_type = (std::string)fs["detector"]["type"];
-    config.matcher_type = (std::string)fs["matcher"]["type"];
-
-    // --- PARSE DETECTOR PARAMS ---
-    cv::FileNode d_node = fs["detector"][config.detector_type];
-    if (!d_node.empty()) {
-        if (config.detector_type == "ORB") {
-            config.detector_params["nfeatures"] = (float)(int)d_node["nfeatures"];
-            config.detector_params["scale_factor"] = (float)d_node["scaleFactor"];
-            config.detector_params["nlevels"] = (float)(int)d_node["nLevels"];
-        } else if (config.detector_type == "SIFT") {
-            config.detector_params["nfeatures"] = (float)(int)d_node["nfeatures"];
-            config.detector_params["nOctaveLayers"] = (float)(int)d_node["nOctaveLayers"];
-            config.detector_params["contrastThreshold"] = (float)d_node["contrastThreshold"];
-            config.detector_params["edgeThreshold"] = (float)(int)d_node["edgeThreshold"];
-            config.detector_params["sigma"] = (float)d_node["sigma"];
-        }
+    // Bootstrap bundled CUDA / cuDNN libs so ONNX Runtime's CUDA EP can
+    // load even without a manual LD_LIBRARY_PATH export. No-op if CPU.
+    if (config.backend == ComputeBackend::CUDA) {
+        CudaPreload::init(config.verbose);
     }
 
-    // --- PARSE MATCHER PARAMS ---
-    config.matcher_params["ratio_thresh"] = (float)fs["matcher"]["distance_ratio"];
-    if (config.matcher_type == "FLANN" && !fs["matcher"]["FLANN"].empty()) {
-        config.matcher_params["kdTrees"] = (float)(int)fs["matcher"]["FLANN"]["kdTrees"];
-        config.matcher_params["searchChecks"] = (float)(int)fs["matcher"]["FLANN"]["searchChecks"];
+    std::string root_path, sequence;
+    if (!loader.loadKittiDataset(root_path, sequence)) {
+        std::cerr << "YAML is missing the dataset block (root_path / sequence).\n";
+        return -1;
     }
 
-    // --- PARSE BUCKETING PARAMS ---
-    if (!fs["bucketing"].empty()) {
-        config.bucketing_params.enabled = (int)fs["bucketing"]["enabled"] != 0;
-        config.bucketing_params.grid_cols = (int)fs["bucketing"]["grid_cols"];
-        config.bucketing_params.grid_rows = (int)fs["bucketing"]["grid_rows"];
-        config.bucketing_params.max_features_per_bucket = (int)fs["bucketing"]["max_features_per_bucket"];
-    }
-    
-    // Inside your config parser function
-    if (!fs["local_bundle_adjustment"].empty()) {
-        config.use_local_ba = (int)fs["local_bundle_adjustment"]["enabled"] != 0;
-        config.lba_window_size = (int)fs["local_bundle_adjustment"]["window_size"];
-        if (!fs["local_bundle_adjustment"]["opt_stride"].empty()) {
-            config.lba_opt_stride = (int)fs["local_bundle_adjustment"]["opt_stride"];
-        }
-    }
-    
-    // --- NEW: PARSE THREAD LIMIT ---
-    if (!fs["system"]["num_threads"].empty()) {
-        config.num_threads = (int)fs["system"]["num_threads"];
-    }
-    // --- Parse Core System Hardware Preferences ---
-    std::string backend_str = "CPU"; // Safe default
-    if (!fs["system"]["backend"].empty()) {
-        backend_str = (std::string)fs["system"]["backend"];
-    }
-
-    // Map string to enum
-    if (backend_str == "CUDA") {
-        config.backend = ComputeBackend::CUDA;
-    } else if (backend_str == "OPENCL") {
-        config.backend = ComputeBackend::OPENCL;
-    } else {
-        config.backend = ComputeBackend::CPU;
-    }
-    
-    config.pose_params["min_disparity"] = 2.0f;
-
-    // --- EXTRACT PATHS FROM YAML ---
-    std::string root_path = (std::string)fs["dataset"]["root_path"];
-    std::string sequence = (std::string)fs["dataset"]["sequence"];
-    
     std::string dataset_path = root_path + "/sequences/" + sequence + "/image_0";
-    std::string poses_file = root_path + "/poses/" + sequence + ".txt"; // Derived Path!
-
-    fs.release();
+    std::string poses_file = root_path + "/poses/" + sequence + ".txt";
 
     // 2. Start Execution
     std::ifstream gt_stream(poses_file);

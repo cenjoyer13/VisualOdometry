@@ -65,6 +65,7 @@ target_link_libraries(KittiEvaluator PRIVATE
     ${OpenCV_LIBS}
     ${ONNXRUNTIME_LIB}
     gtsam
+    ${CMAKE_DL_LIBS}
 )
 
 # --- BURN RPATHS INTO BINARY ---
@@ -130,6 +131,7 @@ if(AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
         ${ONNXRUNTIME_LIB}
         gtsam
         ${AIRSIM_LIBS}
+        ${CMAKE_DL_LIBS}
     )
     set_target_properties(PathPlayer PROPERTIES
         INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs"

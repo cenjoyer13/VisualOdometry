@@ -17,6 +17,8 @@
 
 #include "odometry/OdometryPipeline.h"
 #include "odometry/OdometryTypes.h"
+#include "odometry/utils/ConfigLoader.h"
+#include "odometry/utils/CudaPreload.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
 using namespace msr::airlib;
@@ -94,103 +96,46 @@ static bool loadTrajectory(const std::string& path, std::vector<Waypoint>& out) 
     return !out.empty();
 }
 
-static bool loadOdometryConfig(const std::string& yaml_file, OdometryConfig& config,
-                               float& playback_velocity) {
-    cv::FileStorage fs(yaml_file, cv::FileStorage::READ);
-    if (!fs.isOpened()) {
+static bool loadPlayerConfig(const std::string& yaml_file, OdometryConfig& config,
+                             float& playback_velocity) {
+    // Defaults tuned for AirSim front camera (640x480, 90 deg FOV).
+    config.backend = ComputeBackend::CPU;
+    config.intrinsics = {320.0f, 320.0f, 320.0f, 240.0f};
+    playback_velocity = 3.0f;
+
+    ConfigLoader loader(yaml_file);
+    if (!loader.isOpen()) {
         std::cerr << "Failed to open YAML: " << yaml_file << "\n";
         std::cerr << "Did you add '%YAML:1.0' to the top of the file?\n";
         return false;
     }
-
-    // Defaults tuned for AirSim front camera (640x480, 90 deg FOV).
-    config.backend = ComputeBackend::CPU;
-    config.intrinsics = {320.0f, 320.0f, 320.0f, 240.0f};
-    config.pose_params["min_disparity"] = 2.0f;
-    playback_velocity = 3.0f;
-
-    config.detector_type = (std::string)fs["detector"]["type"];
-    config.matcher_type = (std::string)fs["matcher"]["type"];
-
-    cv::FileNode d_node = fs["detector"][config.detector_type];
-    if (!d_node.empty()) {
-        if (config.detector_type == "ORB") {
-            config.detector_params["nfeatures"] = (float)(int)d_node["nfeatures"];
-            config.detector_params["scale_factor"] = (float)d_node["scaleFactor"];
-            config.detector_params["nlevels"] = (float)(int)d_node["nLevels"];
-        } else if (config.detector_type == "SIFT") {
-            config.detector_params["nfeatures"] = (float)(int)d_node["nfeatures"];
-            config.detector_params["nOctaveLayers"] = (float)(int)d_node["nOctaveLayers"];
-            config.detector_params["contrastThreshold"] = (float)d_node["contrastThreshold"];
-            config.detector_params["edgeThreshold"] = (float)(int)d_node["edgeThreshold"];
-            config.detector_params["sigma"] = (float)d_node["sigma"];
-        }
-    }
-
-    if (!fs["matcher"].empty()) {
-        config.matcher_params["ratio_thresh"] = (float)fs["matcher"]["distance_ratio"];
-        if (config.matcher_type == "FLANN" && !fs["matcher"]["FLANN"].empty()) {
-            config.matcher_params["kdTrees"] = (float)(int)fs["matcher"]["FLANN"]["kdTrees"];
-            config.matcher_params["searchChecks"] = (float)(int)fs["matcher"]["FLANN"]["searchChecks"];
-        }
-    }
-
-    if (!fs["bucketing"].empty()) {
-        config.bucketing_params.enabled = (int)fs["bucketing"]["enabled"] != 0;
-        config.bucketing_params.grid_cols = (int)fs["bucketing"]["grid_cols"];
-        config.bucketing_params.grid_rows = (int)fs["bucketing"]["grid_rows"];
-        config.bucketing_params.max_features_per_bucket = (int)fs["bucketing"]["max_features_per_bucket"];
-    }
-
-    if (!fs["local_bundle_adjustment"].empty()) {
-        config.use_local_ba = (int)fs["local_bundle_adjustment"]["enabled"] != 0;
-        config.lba_window_size = (int)fs["local_bundle_adjustment"]["window_size"];
-        if (!fs["local_bundle_adjustment"]["opt_stride"].empty()) {
-            config.lba_opt_stride = (int)fs["local_bundle_adjustment"]["opt_stride"];
-        }
-    }
-
-    if (!fs["system"].empty()) {
-        if (!fs["system"]["num_threads"].empty()) {
-            config.num_threads = (int)fs["system"]["num_threads"];
-        }
-        std::string backend_str = "CPU";
-        if (!fs["system"]["backend"].empty()) {
-            backend_str = (std::string)fs["system"]["backend"];
-        }
-        if (backend_str == "CUDA")        config.backend = ComputeBackend::CUDA;
-        else if (backend_str == "OPENCL") config.backend = ComputeBackend::OPENCL;
-        else                              config.backend = ComputeBackend::CPU;
-    }
-
-    if (!fs["airsim"].empty()) {
-        if (!fs["airsim"]["playback_velocity"].empty()) {
-            playback_velocity = (float)fs["airsim"]["playback_velocity"];
-        }
-        cv::FileNode in_node = fs["airsim"]["intrinsics"];
-        if (!in_node.empty()) {
-            config.intrinsics.fx = (float)in_node["fx"];
-            config.intrinsics.fy = (float)in_node["fy"];
-            config.intrinsics.cx = (float)in_node["cx"];
-            config.intrinsics.cy = (float)in_node["cy"];
-        }
-    }
-
-    fs.release();
+    loader.loadOdometryConfig(config);
+    loader.loadPlaybackVelocity(playback_velocity);
     return true;
 }
 
 int main(int argc, char** argv) {
     if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <trajectory.csv> <odometry_config.yaml>\n";
+        std::cerr << "Usage: " << argv[0] << " <trajectory.csv> <odometry_config.yaml> [--debug]\n";
         return -1;
     }
 
     setvbuf(stdout, NULL, _IONBF, 0);
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
 
-    std::string traj_file = argv[1];
-    std::string yaml_file = argv[2];
+    std::string traj_file;
+    std::string yaml_file;
+    bool cli_debug = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--debug") cli_debug = true;
+        else if (traj_file.empty()) traj_file = arg;
+        else if (yaml_file.empty()) yaml_file = arg;
+    }
+    if (traj_file.empty() || yaml_file.empty()) {
+        std::cerr << "Usage: " << argv[0] << " <trajectory.csv> <odometry_config.yaml> [--debug]\n";
+        return -1;
+    }
 
     // --- Load trajectory ---
     std::vector<Waypoint> waypoints;
@@ -203,8 +148,13 @@ int main(int argc, char** argv) {
     // --- Load odometry config ---
     OdometryConfig config;
     float playback_velocity = 3.0f;
-    if (!loadOdometryConfig(yaml_file, config, playback_velocity)) {
+    if (!loadPlayerConfig(yaml_file, config, playback_velocity)) {
         return -1;
+    }
+    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose
+
+    if (config.backend == ComputeBackend::CUDA) {
+        CudaPreload::init(config.verbose);
     }
     std::cout << "[PLAYER] Detector=" << config.detector_type
               << " Matcher=" << config.matcher_type

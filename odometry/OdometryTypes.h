@@ -72,20 +72,57 @@ struct BucketingConfig {
     int max_features_per_bucket = 20;
 };
 
+// All knobs exposed by LocalBundleAdjustment. Defaults match the values that
+// were previously hardcoded in LocalBundleAdjustment.cpp.
+struct LBAParams {
+    // Sliding-window mechanics
+    int window_size = 10;
+    int opt_stride = 2;
+
+    // Tight prior on the oldest pose in the window — pins the gauge.
+    double anchor_prior_sigma = 1e-4;
+
+    // Loose prior on the newest pose — caps the cumulative drift the
+    // SmartFactor chain is allowed to pull within one optimization.
+    double end_prior_rot_sigma = 0.02;     // rad, per axis
+    double end_prior_trans_sigma = 0.20;   // m,  per axis
+
+    // BetweenFactor noise for moving frames.
+    double between_rot_sigma = 0.02;
+    double between_trans_sigma = 0.05;
+
+    // BetweenFactor noise for stationary frames (identity measurement).
+    double stationary_rot_sigma = 0.005;
+    double stationary_trans_sigma = 0.01;
+
+    // SmartProjectionPoseFactor settings.
+    double pixel_sigma = 1.0;              // pixel noise sigma
+    double rank_tolerance = 1e-5;
+    double outlier_threshold = 3.0;        // post-triangulation reprojection cutoff (px)
+
+    // Per-track admission filter.
+    int min_observations = 4;
+    double min_bbox_diagonal = 25.0;       // pixel parallax floor
+
+    // Correction publishing acceptance.
+    int min_smart_factors = 50;
+    double max_correction_translation = 0.5;  // m
+    double max_correction_rotation_deg = 5.0;
+};
 
 struct OdometryConfig {
     ComputeBackend backend = ComputeBackend::CPU;
     CameraIntrinsics intrinsics;
-    
-    std::string detector_type = "SIFT"; 
-    std::string matcher_type = "FLANN"; 
 
-    int num_threads = 1; // <-- NEW: Global thread limit
-    
+    std::string detector_type = "SIFT";
+    std::string matcher_type = "FLANN";
+
+    int num_threads = 1;
+    bool verbose = false;          // Global debug toggle (YAML system.verbose or CLI --debug).
+
     bool use_local_ba = false;
-    int lba_window_size = 10;
-    int lba_opt_stride = 2;
-    
+    LBAParams lba_params;
+
     BucketingConfig bucketing_params;
 
     std::map<std::string, float> detector_params;

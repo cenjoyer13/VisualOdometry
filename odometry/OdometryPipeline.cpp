@@ -36,16 +36,13 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
       is_first_frame(true) 
 {
     if (config.use_local_ba) {
-        // 1. Construct the K matrix from your config variables
-        cv::Mat K = (cv::Mat_<double>(3, 3) << 
+        cv::Mat K = (cv::Mat_<double>(3, 3) <<
             config.intrinsics.fx, 0.0, config.intrinsics.cx,
             0.0, config.intrinsics.fy, config.intrinsics.cy,
             0.0, 0.0, 1.0);
 
-        // 2. Pass it to the LBA constructor alongside the window size
-        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_window_size, config.lba_opt_stride);
-
-        lba_->start(); // Spin up the parallel optimization thread
+        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_params, config.verbose);
+        lba_->start();
     }
 
     std::cout << "[OdometryPipeline] Pipeline successfully assembled and ready." << std::endl;
