@@ -4,11 +4,30 @@ project(OdometryKittiTest LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
-add_compile_definitions(EIGEN_DONT_ALIGN_STATICALLY EIGEN_DONT_VECTORIZE)
+# Eigen ABI safety vs GTSAM.
+# The installed libgtsam.so was built with GTSAM_BUILD_WITH_MARCH_NATIVE=OFF, so
+# its compiled code lays out fixed-size Eigen types (Pose3, Matrix4d, Cal3_S2,
+# Values entries, ...) with the SSE default of 16-byte alignment.
+# Our code is compiled with -march=native (see CMakePresets.json / cache),
+# which on an AVX-capable CPU makes Eigen bump that alignment to 32 bytes.
+# The two halves then agree on type names but disagree on size/alignment, and
+# the first runOptimization() call corrupts the heap with
+#   "double free or corruption (out)"
+# exactly when the LBA window fills (frame == lba_window_size).
+#
+# Fix without giving up -march=native / -ffast-math: cap Eigen's *struct*
+# alignment at 16 bytes so its types match GTSAM's compiled layout. Eigen
+# still uses AVX for arithmetic — it just emits unaligned loads/stores where
+# necessary, which is the layout GTSAM itself was compiled against.
+add_compile_definitions(
+    EIGEN_DONT_VECTORIZE
+)
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
 # --- FIND OPENCV 4.8.0 ---
 find_package(OpenCV 4.8.0 REQUIRED)
