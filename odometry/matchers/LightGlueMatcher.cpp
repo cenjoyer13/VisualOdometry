@@ -2,14 +2,12 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include <unordered_map> // <-- ADD THIS
 
-LightGlueMatcher::LightGlueMatcher(const OdometryConfig& cfg) 
-    : config(cfg), 
+LightGlueMatcher::LightGlueMatcher(const OdometryConfig& cfg)
+    : config(cfg),
       memory_info_cpu(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)),
       is_sift(false)
 {
-    // Change ORT_LOGGING_LEVEL_WARNING to ORT_LOGGING_LEVEL_ERROR
     env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_ERROR, "LightGlue");
 }
 
@@ -17,27 +15,27 @@ void LightGlueMatcher::initializeSession(int desc_dim) {
     Ort::SessionOptions session_options;
     session_options.SetIntraOpNumThreads(config.num_threads);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    
-    // --- NEW: Force silence on non-critical logs ---
-    session_options.SetLogSeverityLevel(3); // 3 = Error, 4 = Fatal
 
-    // --- ARCHITECTURAL BACKEND ROUTING ---
+    // Severity 3 silences ORT info/warning logs; only errors and fatals.
+    session_options.SetLogSeverityLevel(3);
+
+    // Execution provider selection. ONNX RT has no native OpenCL EP, so the
+    // OPENCL branch collapses to CPU.
     switch (config.backend) {
         case ComputeBackend::CUDA: {
             try {
                 OrtCUDAProviderOptionsV2* cuda_options = nullptr;
                 Ort::ThrowOnError(Ort::GetApi().CreateCUDAProviderOptions(&cuda_options));
-                
+
                 std::vector<const char*> keys = {"device_id"};
                 std::vector<const char*> values = {"0"};
-                
+
                 Ort::ThrowOnError(Ort::GetApi().UpdateCUDAProviderOptions(cuda_options, keys.data(), values.data(), keys.size()));
-                
-                // --- THE FIX: Add the asterisk (*) to dereference the pointer ---
-                session_options.AppendExecutionProvider_CUDA_V2(*cuda_options); 
-                
+
+                session_options.AppendExecutionProvider_CUDA_V2(*cuda_options);
+
                 Ort::GetApi().ReleaseCUDAProviderOptions(cuda_options);
-                
+
                 std::cout << "[LightGlue] Backend: CUDA Execution Provider Enabled (V2 API)." << std::endl;
             } catch (const Ort::Exception& e) {
                 std::cerr << "[LightGlue] CUDA Init Failed: " << e.what() << std::endl;
@@ -96,30 +94,29 @@ std::vector<cv::DMatch> LightGlueMatcher::match(DeviceBuffer& desc_old,
 {
     if (kp_old.empty() || kp_new.empty()) return {};
 
-    // Clone into CPU memory. Even if the detector ran on CUDA, ONNX Runtime's default 
-    // run method requires host pointers to manage its own internal CUDA buffer transfers.
+    // Stage descriptors on the host: ONNX RT's default Run path takes host
+    // pointers and handles its own device transfers when running on CUDA.
     cv::Mat d0 = desc_old.getAsCPU().clone();
     cv::Mat d1 = desc_new.getAsCPU().clone();
-    
+
     if (d0.type() != CV_32F) d0.convertTo(d0, CV_32F);
     if (d1.type() != CV_32F) d1.convertTo(d1, CV_32F);
 
-    // Lazy load the network on frame 1
+    // Session is built on the first frame, when desc_dim is known.
     if (!session) {
         initializeSession(d0.cols);
     }
 
-    // ========================================================
-    // --- NEW: DYNAMIC NODE DISCOVERY (Runs exactly once) ---
-    // ========================================================
+    // Resolve the confidence-score output name. Different LightGlue ONNX
+    // exports name it differently ("scores", "mscores", "matching_scores"),
+    // so the search is by substring and cached for subsequent frames.
     static std::string score_node_name = "";
     static bool node_checked = false;
-    
+
     if (!node_checked) {
         Ort::AllocatorWithDefaultOptions allocator;
         for (size_t i = 0; i < session->GetOutputCount(); i++) {
             std::string name = session->GetOutputNameAllocated(i, allocator).get();
-            // Automatically find whatever the community named the score tensor
             if (name.find("score") != std::string::npos) {
                 score_node_name = name;
             }
@@ -129,9 +126,8 @@ std::vector<cv::DMatch> LightGlueMatcher::match(DeviceBuffer& desc_old,
             std::cout << "[LightGlue] Dynamically locked confidence score node: '" << score_node_name << "'" << std::endl;
         }
     }
-    // ========================================================
 
-    // Apply RootSIFT math if using the SIFT model
+    // RootSIFT transform is only required for the 128D SIFT branch.
     if (is_sift) {
         convertToRootSift(d0);
         convertToRootSift(d1);
@@ -201,7 +197,7 @@ std::vector<cv::DMatch> LightGlueMatcher::match(DeviceBuffer& desc_old,
         input_names.push_back("oris1");
     }
 
-    // 1. Dynamically route the output requests based on what the model supports
+    // Request the scores output only if the model exposes one.
     std::vector<const char*> output_names = {"matches"};
     if (!score_node_name.empty()) {
         output_names.push_back(score_node_name.c_str());
@@ -212,9 +208,8 @@ std::vector<cv::DMatch> LightGlueMatcher::match(DeviceBuffer& desc_old,
 
         auto* matches_out = output_tensors[0].GetTensorMutableData<int64_t>();
         auto match_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
-        
+
         float* scores_out = nullptr;
-        // Safely extract scores only if the node existed and was requested
         if (!score_node_name.empty() && output_tensors.size() > 1) {
             scores_out = output_tensors[1].GetTensorMutableData<float>();
         }
@@ -226,21 +221,22 @@ std::vector<cv::DMatch> LightGlueMatcher::match(DeviceBuffer& desc_old,
         for (int i = 0; i < num_matches; ++i) {
             int idx0 = static_cast<int>(matches_out[i * 2 + 0]);
             int idx1 = static_cast<int>(matches_out[i * 2 + 1]);
-            
+
             float distance = 0.0f;
             if (scores_out) {
-                // Invert the confidence score so OpenCV sorts the strongest matches first
-                distance = 1.0f - scores_out[i]; 
+                // cv::DMatch::distance is treated as "lower is better" by the
+                // rest of the pipeline; invert the LightGlue confidence so
+                // strongest matches sort first.
+                distance = 1.0f - scores_out[i];
             }
 
             good_matches.emplace_back(idx0, idx1, distance);
         }
-    
-        // 2. NOW it actually sorts by confidence!
+
         std::stable_sort(good_matches.begin(), good_matches.end(), [](const cv::DMatch& a, const cv::DMatch& b) {
             return a.distance < b.distance;
         });
-    
+
         return good_matches;
 
     } catch (const Ort::Exception& e) {

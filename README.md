@@ -2,7 +2,7 @@
 
 A modular monocular visual-odometry pipeline in C++17. Supports classical
 feature stacks (ORB, SIFT, FLANN, brute-force) and deep ones (SuperPoint,
-ALIKED, LightGlue) via ONNX Runtime, with a GTSAM-based local bundle
+LightGlue) via ONNX Runtime, with a GTSAM-based local bundle
 adjustment running on a background thread. The project targets AirSim as
 its primary host: it ships an interactive sandbox for live flight plus a
 record-and-replay loop for reproducible evaluation against a known ground
@@ -142,7 +142,7 @@ running. Edit `dataset.root_path` in the YAML first.
 The YAML config has the following top-level blocks:
 
 - **`camera`** — `fx, fy, cx, cy` for the source camera.
-- **`detector`** — `type:` is one of `ORB`, `SIFT`, `SuperPoint`, `ALIKED`.
+- **`detector`** — `type:` is one of `ORB`, `SIFT`, `SuperPoint`.
   Classical types take a sub-block with their parameters; deep types are
   configured at the model level.
 - **`matcher`** — `type:` is one of `KinematicMatcher` (BF + ratio test,
@@ -180,6 +180,6 @@ OpenCV will refuse to open the file without it.
 ├── main_player.cpp             PathPlayer entrypoint (Windows)
 ├── main_test.cpp               KittiEvaluator entrypoint (portable)
 ├── core/                       FreeplayDrone worker thread (Windows)
-├── models/                     ONNX weights (SuperPoint, ALIKED, LightGlue)
+├── models/                     ONNX weights (SuperPoint, LightGlue)
 └── odometry/                   pipeline + interfaces + factories
 ```

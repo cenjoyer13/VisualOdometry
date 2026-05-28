@@ -1,0 +1,32 @@
+%YAML:1.0
+
+dataset:
+  root_path: ../../../VO-datasets/KITTI/data_odometry_gray/dataset
+  sequence: '00'
+
+detector:
+  type: SuperPoint
+
+matcher:
+  type: Kinematic
+  distance_ratio: 0.75
+  
+bucketing:
+  enabled: 1
+  grid_cols: 6
+  grid_rows: 3
+  max_features_per_bucket: 70
+ 
+local_bundle_adjustment:
+  enabled: 1
+  window_size: 10
+  pixel_sigma: 0.5
+  between_rot_sigma: 0.01
+  between_trans_sigma: 0.02
+  outlier_threshold: 1.5
+
+
+system:
+  backend: CUDA
+  num_threads: 12
+  verbose: 0

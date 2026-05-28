@@ -8,15 +8,15 @@
 class LightGlueMatcher : public IFeatureMatcher {
 private:
     OdometryConfig config;
-    
-    // ONNX Runtime ecosystem
+
     std::unique_ptr<Ort::Env> env;
     std::unique_ptr<Ort::Session> session;
     Ort::MemoryInfo memory_info_cpu;
 
+    // Routing flag: true selects the SIFT-128 model and the RootSIFT
+    // descriptor transform; false selects the SuperPoint-256 model.
     bool is_sift;
 
-    // Internal initialization and math helpers
     void initializeSession(int desc_dim);
     void convertToRootSift(cv::Mat& desc);
 

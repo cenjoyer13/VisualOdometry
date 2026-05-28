@@ -16,33 +16,32 @@
 struct BAFrame {
     uint64_t frame_id = 0;
 
-    // Snapshot of the integrator's world pose at the moment this frame was pushed.
-    // 4x4 CV_64F. Phase 1 absolute-pose contract.
+    // Integrator's world pose at push time. 4x4 CV_64F.
     cv::Mat T_world;
 
-    // Relative pose measurement from the pose estimator (T_curr_prev convention,
-    // t already scaled to metric by the pipeline). Retained for use as the
-    // BetweenFactor measurement between consecutive poses.
+    // Relative pose measurement (T_curr_prev), with t already metric-scaled
+    // by the pipeline. Used as the BetweenFactor measurement to the previous
+    // frame in the window.
     cv::Mat R;
     cv::Mat t;
 
-    // True if the pipeline considered this frame stationary (norm_t below the
-    // motion threshold). Pushed anyway so LBA's prev_frame_track_ids_ stays in
-    // sync; LBA treats it as a near-identity BetweenFactor.
+    // Stationary tag from the frontend. Stationary frames are still pushed
+    // so prev_frame_track_ids_ stays aligned with the frontend match indexing;
+    // LBA collapses their BetweenFactor to a tight identity.
     bool is_stationary = false;
 
     std::vector<cv::Point2f> points2D;
 
-    // Frontend fills: index of the matching point in the PREV frame (-1 if new).
+    // Frontend fills this: matching index in the previous frame, or -1 if new.
     std::vector<int> matched_prev_idx;
 
-    // Backend fills: the global landmark ID per 2D point.
+    // Backend fills this: the global landmark ID assigned per 2D point.
     std::vector<int64_t> track_ids;
 };
 
-// Result of a single LBA optimization: the world-frame pose for the newest
-// optimized frame, identified by frame_id. The integrator computes its own
-// world-frame delta against the snapshot it took at push time.
+// Output of one LBA pass: the optimized world-frame pose for the newest
+// frame in the window. The integrator turns this into a world-frame delta
+// using the snapshot it took at frame_id push time.
 struct BACorrection {
     uint64_t frame_id = 0;
     cv::Mat T_world_optimized;  // 4x4 CV_64F

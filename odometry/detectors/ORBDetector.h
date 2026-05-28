@@ -3,15 +3,14 @@
 #include "../OdometryTypes.h"
 #include <opencv2/features2d.hpp>
 
-// Forward declare CUDA ORB so we don't force the inclusion of CUDA 
-// headers into the rest of the project pipeline.
+// Forward declared: keeps CUDA headers out of files that include this one.
 namespace cv { namespace cuda { class ORB; } }
 
 class ORBDetector : public IFeatureDetector {
 private:
     OdometryConfig config;
     
-    // CPU and OpenCL share the standard cv::ORB pointer
+    // CPU and OpenCL paths share this; OpenCL is selected via cv::UMat input.
     cv::Ptr<cv::ORB> orb_cpu;
 
 #ifdef HAS_CUDA

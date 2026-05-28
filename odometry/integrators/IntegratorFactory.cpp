@@ -3,8 +3,8 @@
 #include <iostream>
 
 std::unique_ptr<ITrajectoryIntegrator> IntegratorFactory::create(const OdometryConfig& config) {
-    // If you add a sophisticated graph-optimization backend later (g2o/Ceres etc.), branch here.
-
+    // Single implementation today. Branch here when a graph-optimization
+    // backend (g2o, Ceres) is wired in alongside the windowed LBA.
     std::cout << "[IntegratorFactory] Instantiating VOIntegrator." << std::endl;
     return std::make_unique<VOIntegrator>(config);
 }

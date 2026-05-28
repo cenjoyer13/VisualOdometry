@@ -21,6 +21,13 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
             out.detector_params["nfeatures"]    = (float)(int)d_node["nfeatures"];
             out.detector_params["scale_factor"] = (float)d_node["scaleFactor"];
             out.detector_params["nlevels"]      = (float)(int)d_node["nLevels"];
+            // Optional ORB knobs. Read only if present, so callers that
+            // omit them keep the cv::ORB::create defaults.
+            if (!d_node["edgeThreshold"].empty()) out.detector_params["edge_threshold"] = (float)(int)d_node["edgeThreshold"];
+            if (!d_node["firstLevel"].empty())    out.detector_params["first_level"]    = (float)(int)d_node["firstLevel"];
+            if (!d_node["WTA_K"].empty())         out.detector_params["wta_k"]          = (float)(int)d_node["WTA_K"];
+            if (!d_node["patchSize"].empty())     out.detector_params["patch_size"]     = (float)(int)d_node["patchSize"];
+            if (!d_node["fastThreshold"].empty()) out.detector_params["fast_threshold"] = (float)(int)d_node["fastThreshold"];
         } else if (out.detector_type == "SIFT") {
             out.detector_params["nfeatures"]         = (float)(int)d_node["nfeatures"];
             out.detector_params["nOctaveLayers"]     = (float)(int)d_node["nOctaveLayers"];

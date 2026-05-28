@@ -3,11 +3,10 @@
 #include <opencv2/core/ocl.hpp>
 
 FLANNMatcher::FLANNMatcher(const OdometryConfig& cfg) : config(cfg) {
-    // Extract parameters with safe fallbacks
+    // Params: pull from config with literal fallbacks when absent.
     int trees = config.matcher_params.count("kdTrees") ? (int)config.matcher_params.at("kdTrees") : 5;
     int checks = config.matcher_params.count("searchChecks") ? (int)config.matcher_params.at("searchChecks") : 50;
 
-    // Inject parameters into the FLANN Index and Search objects
     flann_matcher = cv::makePtr<cv::FlannBasedMatcher>(
         cv::makePtr<cv::flann::KDTreeIndexParams>(trees),
         cv::makePtr<cv::flann::SearchParams>(checks)
@@ -22,10 +21,8 @@ std::vector<cv::DMatch> FLANNMatcher::match(DeviceBuffer& desc_old,
 
     float ratio_thresh = config.matcher_params.count("ratio_thresh") ? config.matcher_params.at("ratio_thresh") : 0.75f;
 
-    // ==========================================
-    // 1. HARDWARE CAPABILITY RESOLVER
-    // Strict Cascade: CUDA -> OPENCL -> CPU
-    // ==========================================
+    // Hardware cascade: CUDA -> OPENCL -> CPU. OpenCV has no
+    // cv::cuda::FlannBasedMatcher, so CUDA falls straight through to OPENCL.
     ComputeBackend target_backend = config.backend;
 
     if (target_backend == ComputeBackend::CUDA) {
@@ -34,7 +31,7 @@ std::vector<cv::DMatch> FLANNMatcher::match(DeviceBuffer& desc_old,
             std::cerr << "[FLANNMatcher] OpenCV lacks cv::cuda::FlannBasedMatcher. Cascading to OpenCL..." << std::endl;
             warned_cuda = true;
         }
-        target_backend = ComputeBackend::OPENCL; // Fallback 1
+        target_backend = ComputeBackend::OPENCL;
     }
 
     if (target_backend == ComputeBackend::OPENCL) {
@@ -44,10 +41,11 @@ std::vector<cv::DMatch> FLANNMatcher::match(DeviceBuffer& desc_old,
                 std::cerr << "[FLANNMatcher] OpenCL not available. Cascading to CPU..." << std::endl;
                 warned_ocl = true;
             }
-            target_backend = ComputeBackend::CPU; // Fallback 2
+            target_backend = ComputeBackend::CPU;
         } else {
-            // Note: KD-Trees cause massive thread divergence on GPUs. 
-            // OpenCV's T-API will safely process this on the CPU internally.
+            // KD-tree traversal is divergent and not GPU-friendly. OpenCV's
+            // T-API falls back to the CPU implementation for FLANN even when
+            // a UMat is passed in.
             static bool warned_flann_ocl = false;
             if (!warned_flann_ocl) {
                 std::cerr << "[FLANNMatcher] Note: KD-Trees cannot be efficiently accelerated on GPUs. OpenCL T-API will process on CPU internally." << std::endl;
@@ -56,40 +54,36 @@ std::vector<cv::DMatch> FLANNMatcher::match(DeviceBuffer& desc_old,
         }
     }
 
-    // ==========================================
-    // 2. EXPLICIT EXECUTION ROUTING
-    // ==========================================
+    // Execution routing.
     std::vector<std::vector<cv::DMatch>> knn_matches;
 
     if (target_backend == ComputeBackend::OPENCL) {
-        
-        // --- STRICT OPENCL EXECUTION ---
+
+        // OpenCL path (kernel falls back to CPU for FLANN, see warning above).
         cv::UMat u_old = desc_old.getAsOpenCL();
         cv::UMat u_new = desc_new.getAsOpenCL();
 
-        // SAFETY CHECK: FLANN requires Float32 descriptors
+        // FLANN requires float32 descriptors; binary descriptors get promoted.
         if (u_old.type() != CV_32F) u_old.convertTo(u_old, CV_32F);
         if (u_new.type() != CV_32F) u_new.convertTo(u_new, CV_32F);
 
         flann_matcher->knnMatch(u_old, u_new, knn_matches, 2);
 
     } else {
-        
-        // --- STRICT CPU EXECUTION ---
+
+        // CPU path.
         cv::Mat cpu_old = desc_old.getAsCPU();
         cv::Mat cpu_new = desc_new.getAsCPU();
 
         if (cpu_old.type() != CV_32F) cpu_old.convertTo(cpu_old, CV_32F);
         if (cpu_new.type() != CV_32F) cpu_new.convertTo(cpu_new, CV_32F);
 
-        // Maximize OpenCV internal TBB/OpenMP threading for CPU execution
-        cv::setNumThreads(config.num_threads); 
+        // Let the FLANN internals use the configured thread count.
+        cv::setNumThreads(config.num_threads);
         flann_matcher->knnMatch(cpu_old, cpu_new, knn_matches, 2);
     }
 
-    // ==========================================
-    // 3. LOWE'S RATIO TEST
-    // ==========================================
+    // Lowe's ratio test.
     std::vector<cv::DMatch> good_matches;
     good_matches.reserve(knn_matches.size());
 

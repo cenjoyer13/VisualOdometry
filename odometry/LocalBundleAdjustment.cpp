@@ -4,7 +4,6 @@
 #include <limits>
 #include <algorithm>
 
-// --- GTSAM HEADERS ---
 #include <gtsam/geometry/Pose3.h>
 #include <gtsam/geometry/Cal3_S2.h>
 #include <gtsam/slam/SmartProjectionPoseFactor.h>
@@ -145,12 +144,10 @@ static cv::Mat pose3ToCvMat(const gtsam::Pose3& p) {
     return T;
 }
 
-// Build the relative pose measurement for a BetweenFactor between
-// consecutive world-frame poses, from the (R, t) measurement stored on the
-// frame. The pose estimator's (R, t) follows x_curr = R * x_prev + t, so
-// T_curr_prev = [R|t] and its inverse [R^T | -R^T * t] = T_prev_curr is the
-// camera-frame relative pose, which matches the convention
-//   X_world(i) = X_world(i-1) * measurement.
+// Build the BetweenFactor measurement between consecutive world-frame poses.
+// The pose estimator returns (R, t) as T_curr_prev (x_curr = R*x_prev + t).
+// The world-frame chain X_world(i) = X_world(i-1) * measurement needs the
+// inverse, T_prev_curr = [R^T | -R^T * t].
 static gtsam::Pose3 relativePoseMeasurement(const cv::Mat& R, const cv::Mat& t) {
     cv::Mat R64, t64;
     R.convertTo(R64, CV_64F);
@@ -172,8 +169,8 @@ void LocalBundleAdjustment::runOptimization() {
     double cx = K_.at<double>(0, 2), cy = K_.at<double>(1, 2);
     gtsam::Cal3_S2::shared_ptr K_gtsam(new gtsam::Cal3_S2(fx, fy, 0.0, cx, cy));
 
-    // 1. Seed initial estimates from each frame's snapshot T_world directly.
-    //    No accumulation, no reference-frame ambiguity.
+    // Initial estimates: each frame's snapshot T_world goes in as-is. No
+    // accumulation, no reference-frame ambiguity.
     for (size_t i = 0; i < local_window_.size(); ++i) {
         if (local_window_[i].T_world.empty()) {
             std::cerr << "[LBA] Frame " << local_window_[i].frame_id
@@ -183,21 +180,18 @@ void LocalBundleAdjustment::runOptimization() {
         initial_estimates.insert(X(i), cvMatToPose3(local_window_[i].T_world));
     }
 
-    // 2. Anchor the oldest frame in the window with a tight prior at its
-    //    initial value. This pins the gauge.
+    // Gauge anchor: tight prior on the oldest pose at its initial value.
     {
         auto priorNoise = gtsam::noiseModel::Isotropic::Sigma(6, params_.anchor_prior_sigma);
         graph.addPrior(X(0), cvMatToPose3(local_window_[0].T_world), priorNoise);
     }
 
-    // 2b. Loose prior on the NEWEST frame at its snapshot value. This caps
-    //     the cumulative drift that the SmartFactor chain is allowed to pull
-    //     within one optimization. BetweenFactor alone only damps relative
-    //     motion — each factor sees ~Δ/W deviation when the chain accumulates
-    //     a total shift of Δ, so the chi-squared cost of meter-scale window
-    //     drift is small and easily paid for by a slight SmartFactor
-    //     reduction. The right way to cap cumulative drift is an anchor at
-    //     the newest pose.
+    // Drift cap: loose prior on the newest pose at its snapshot value.
+    // BetweenFactor alone cannot cap cumulative drift across the window.
+    // Each factor only sees ~Delta/W deviation when the chain shifts by
+    // Delta total, so the chi-squared cost of meter-scale window drift is
+    // tiny and easily absorbed by a small SmartFactor improvement. Anchoring
+    // the newest pose is what actually keeps a single pass from running off.
     {
         const size_t last = local_window_.size() - 1;
         const double rs = params_.end_prior_rot_sigma;
@@ -208,13 +202,9 @@ void LocalBundleAdjustment::runOptimization() {
         graph.addPrior(X(last), cvMatToPose3(local_window_[last].T_world), endNoise);
     }
 
-    // 3. BetweenFactor chain to lock scale and stabilize the solver when
-    //    SmartFactors degenerate. Stationary frames get an identity
-    //    measurement; moving frames use the (R,t) from the pose estimator.
-    //    Note: BetweenFactor alone does NOT cap the cumulative drift across
-    //    the window — each factor only sees ~Δ/W deviation when the chain
-    //    accumulates Δ. The newest-frame prior above is what actually caps
-    //    cumulative drift.
+    // BetweenFactor chain: locks the scale and keeps the solver well-posed
+    // when SmartFactors degenerate. Stationary frames feed an identity
+    // measurement; moving frames feed the (R, t) from the pose estimator.
     gtsam::Vector6 betweenSigmas;
     betweenSigmas << params_.between_rot_sigma, params_.between_rot_sigma, params_.between_rot_sigma,
                      params_.between_trans_sigma, params_.between_trans_sigma, params_.between_trans_sigma;
@@ -241,20 +231,19 @@ void LocalBundleAdjustment::runOptimization() {
         ++between_count;
     }
 
-    // 4. SmartProjectionPoseFactors.
-    //    - σ = 2.0 px so per-factor weight doesn't dominate the BetweenFactor
-    //      chain when track quality is poor.
-    //    - ZERO_ON_DEGENERACY: degenerate landmarks drop out entirely instead
-    //      of inflating err with no gradient (the failure we saw on the first
-    //      window: err 3.67e6 -> 3.67e6, corr=0).
-    //    - setDynamicOutlierRejectionThreshold: GTSAM's supported way to do
-    //      robust handling with SmartFactors. Any factor whose post-
-    //      triangulation reprojection error exceeds the threshold is treated
-    //      as degenerate (i.e. dropped under ZERO_ON_DEGENERACY).
-    //    Note: a Robust m-estimator wrapper is intentionally NOT used here —
-    //    SmartProjectionPoseFactor's HESSIAN linearization Schur-eliminates
-    //    the landmark and is incompatible with a per-observation robust
-    //    kernel.
+    // SmartProjectionPoseFactors.
+    //   - pixel_sigma: per-observation noise sigma. Kept loose enough that
+    //     each factor doesn't dominate the BetweenFactor chain on poor tracks.
+    //   - ZERO_ON_DEGENERACY: degenerate landmarks are dropped entirely
+    //     rather than inflating the error with no gradient. Without this the
+    //     optimizer can sit at err X -> X with a zero correction.
+    //   - setDynamicOutlierRejectionThreshold: GTSAM's supported robust path
+    //     for SmartFactors. Factors whose post-triangulation reprojection
+    //     error exceeds the threshold are treated as degenerate and dropped
+    //     under ZERO_ON_DEGENERACY.
+    // A Robust m-estimator wrapper is intentionally avoided: HESSIAN
+    // linearization Schur-eliminates the landmark, which is incompatible
+    // with a per-observation robust kernel.
     auto pixelNoise = gtsam::noiseModel::Isotropic::Sigma(2, params_.pixel_sigma);
 
     gtsam::SmartProjectionParams smartFactorParams;
@@ -283,9 +272,10 @@ void LocalBundleAdjustment::runOptimization() {
         const auto& observations = track_pair.second;
         if (observations.size() < static_cast<size_t>(kMinObs)) continue;
 
-        // Pixel-bounding-box diagonal filter rejects tracks that haven't
-        // actually translated across the image (parallax-starved landmarks
-        // are what SmartFactor degeneracy modes were created for).
+        // Bounding-box diagonal filter: rejects parallax-starved tracks
+        // whose observations cluster within a few pixels. These are exactly
+        // the degenerate landmarks SmartFactor was designed to skip; the
+        // explicit filter just avoids paying the triangulation cost first.
         float min_x = std::numeric_limits<float>::infinity();
         float max_x = -std::numeric_limits<float>::infinity();
         float min_y = std::numeric_limits<float>::infinity();
@@ -310,12 +300,10 @@ void LocalBundleAdjustment::runOptimization() {
         ++smart_count;
     }
 
-    // Wrap the entire optimization pipeline in a try/catch.
-    // CheiralityException (and other GTSAM throws) can fire from:
-    //   - LevenbergMarquardtOptimizer::optimize() during inner retriangulation
-    //   - graph.error() during initial residual evaluation
-    //   - graph.error(result) during post-optimization scoring
-    // Any of these escaping caused the abort we observed at frame=21.
+    // Whole optimization is wrapped in try/catch. CheiralityException and
+    // other GTSAM throws can fire from optimize() during inner retriangulation
+    // or from graph.error() on initial/final residual evaluation; any of them
+    // escaping would abort the worker thread.
     try {
         const double err_before = graph.error(initial_estimates);
 
@@ -348,9 +336,9 @@ void LocalBundleAdjustment::runOptimization() {
                       << std::endl;
         }
 
-        // Reject under-determined optimizations. With too few SmartFactors the
-        // optimizer can drive err to machine zero by shuffling poses freely,
-        // producing a meaningless correction.
+        // Reject under-determined passes. Too few SmartFactors and the
+        // optimizer can drive err to ~zero by shuffling poses freely; the
+        // resulting "correction" is noise.
         if (smart_count < params_.min_smart_factors) {
             if (verbose_) {
                 std::cerr << "[LBA] discarding correction (under-constrained, smart="
@@ -359,9 +347,9 @@ void LocalBundleAdjustment::runOptimization() {
             return;
         }
 
-        // Guard against outlandish jumps that indicate a bad solution from
-        // contaminated tracks. The X(last) loose prior already caps the
-        // optimizer's reach; these thresholds reject anything overshooting it.
+        // Reject jumps that indicate a bad solution from contaminated tracks.
+        // The newest-pose loose prior already caps the optimizer's reach;
+        // these thresholds catch anything that still overshoots.
         if (corr_t_norm > params_.max_correction_translation ||
             corr_rot_deg > params_.max_correction_rotation_deg) {
             if (verbose_) {
@@ -372,14 +360,15 @@ void LocalBundleAdjustment::runOptimization() {
             return;
         }
 
-        // CRITICAL: copy the optimized poses back into the window so the LBA's
-        // view is internally consistent on the next pass. Otherwise older
-        // frames retain pre-correction snapshots while newer frames carry
-        // the integrator's post-correction state, and the BetweenFactor
-        // chain develops a non-zero initial residual equal to the previous
-        // correction delta — the optimizer then partly undoes its own work
-        // each cycle. Only do this when we are publishing the correction;
-        // otherwise the integrator state and LBA window must remain aligned.
+        // Critical: copy the optimized poses back into the window so the
+        // LBA's view stays internally consistent on the next pass.
+        // Otherwise older frames keep their pre-correction snapshots while
+        // newer frames carry the integrator's post-correction state, and
+        // the BetweenFactor chain develops a non-zero initial residual
+        // equal to the previous correction. The optimizer then partly
+        // undoes its own work each cycle. Only safe when this pass is
+        // actually publishing; the integrator state and LBA window must
+        // stay aligned.
         for (size_t i = 0; i < local_window_.size(); ++i) {
             local_window_[i].T_world = pose3ToCvMat(result.at<gtsam::Pose3>(X(i)));
         }

@@ -8,10 +8,12 @@ private:
     int h;
     float scale;
     cv::Mat traj;
-    std::vector<double> errors;
+    // Per-frame errors: in-plane (X-Z) and full 3D.
+    std::vector<double> errors_2d;
+    std::vector<double> errors_3d;
 
 public:
     explicit RealTime2DTrajectory(float scale = 0.5f);
-    
+
     cv::Mat update(const cv::Vec3f& est_xyz, const cv::Vec3f& gt_xyz);
 };

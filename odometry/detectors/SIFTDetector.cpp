@@ -15,11 +15,9 @@ SIFTDetector::SIFTDetector(const OdometryConfig& cfg) : config(cfg) {
 }
 
 void SIFTDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& out_keypoints, DeviceBuffer& out_descriptors) {
-    
-    // ==========================================
-    // 1. HARDWARE CAPABILITY RESOLVER
-    // Strict Cascade: CUDA -> OPENCL -> CPU
-    // ==========================================
+
+    // Hardware cascade: CUDA -> OPENCL -> CPU. OpenCV ships no cv::cuda::SIFT,
+    // so CUDA falls straight through to OPENCL.
     ComputeBackend target_backend = config.backend;
 
     if (target_backend == ComputeBackend::CUDA) {
@@ -42,29 +40,24 @@ void SIFTDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& out_ke
         }
     }
 
-    // ==========================================
-    // 2. LOGIC-FEATURE OVERRIDE
-    // Bucketing strictly requires CPU multithreading
-    // ==========================================
+    // Bucketing override: per-tile SIFT runs in CPU threads. Round-tripping
+    // tiles to a GPU would dominate compute time, so force CPU here.
     if (config.bucketing_params.enabled && target_backend != ComputeBackend::CPU) {
         static bool warned_bucketing = false;
         if (!warned_bucketing) {
             std::cerr << "[SIFTDetector] True spatial bucketing requested. Bypassing GPU to prevent PCIe bottlenecks. Forcing CPU Multithreading..." << std::endl;
             warned_bucketing = true;
         }
-        target_backend = ComputeBackend::CPU; // Hard override
+        target_backend = ComputeBackend::CPU;
     }
 
-
-    // ==========================================
-    // 3. EXPLICIT EXECUTION ROUTING
-    // ==========================================
+    // Execution routing.
     if (target_backend == ComputeBackend::OPENCL) {
-        
-        // --- STRICT OPENCL EXECUTION (Whole Image Only) ---
+
+        // OpenCL path: whole-image detect on a cv::UMat.
         cv::UMat u_img = image.getAsOpenCL();
         cv::UMat u_gray;
-        
+
         if (u_img.channels() == 3) {
             cv::cvtColor(u_img, u_gray, cv::COLOR_BGR2GRAY);
         } else {
@@ -74,13 +67,13 @@ void SIFTDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& out_ke
         cv::UMat u_descriptors;
         sift->detectAndCompute(u_gray, cv::noArray(), out_keypoints, u_descriptors);
         out_descriptors = DeviceBuffer(u_descriptors);
-        
+
     } else {
-        
-        // --- STRICT CPU EXECUTION (Bucketed or Standard) ---
+
+        // CPU path: bucketed (per-tile threaded) or whole-image.
         cv::Mat cpu_img = image.getAsCPU();
         cv::Mat gray_img;
-        
+
         if (cpu_img.channels() == 3) {
             cv::cvtColor(cpu_img, gray_img, cv::COLOR_BGR2GRAY);
         } else {
@@ -89,18 +82,18 @@ void SIFTDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& out_ke
 
         if (config.bucketing_params.enabled) {
             cv::Mat cpu_descriptors;
-            
-            // Factory lambda allows FeatureUtils to instantiate local SIFT objects per thread
+
+            // Per-thread SIFT builder: cv::SIFT instances are not thread-safe,
+            // so each worker constructs its own copy from the same parameters.
             auto builder = [this]() {
                 return cv::SIFT::create(nfeatures, nOctaveLayers, contrastThreshold, edgeThreshold, sigma);
             };
-            
-            // Dispatches to your multithreaded grid chopper
+
             FeatureUtils::detectWithGridCPU(builder, gray_img, out_keypoints, cpu_descriptors, config.bucketing_params, config.num_threads);
             out_descriptors = DeviceBuffer(cpu_descriptors);
         } else {
             cv::Mat cpu_descriptors;
-            cv::setNumThreads(config.num_threads); // Maximize standard OpenCV CPU threading
+            cv::setNumThreads(config.num_threads);
             sift->detectAndCompute(gray_img, cv::noArray(), out_keypoints, cpu_descriptors);
             out_descriptors = DeviceBuffer(cpu_descriptors);
         }

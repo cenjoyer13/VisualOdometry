@@ -4,11 +4,9 @@
 AirSimScaleEstimator::AirSimScaleEstimator(const OdometryConfig& cfg) : config(cfg) {}
 
 double AirSimScaleEstimator::updateScale(const GroundTruthData& gt_prev, const GroundTruthData& gt_curr) {
-    // 1. Calculate the difference vector between current and previous GT positions
+    // Reads metric scale straight from ground truth: ||p_curr - p_prev||.
+    // Only correct when the GT samples are aligned with the camera frames
+    // being processed.
     cv::Vec3f delta = gt_curr.position - gt_prev.position;
-    
-    // 2. cv::norm computes the exact Euclidean magnitude: sqrt(x^2 + y^2 + z^2)
-    double scale = cv::norm(delta);
-    
-    return scale;
+    return cv::norm(delta);
 }

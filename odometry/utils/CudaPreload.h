@@ -22,7 +22,7 @@ public:
     // directory can't be located.
     //
     // Must be invoked BEFORE any ONNX Runtime session is constructed.
-    // `verbose` mirrors OdometryConfig::verbose — when true, prints which
+    // `verbose` mirrors OdometryConfig::verbose; when true, prints which
     // libs were preloaded.
     static void init(bool verbose = false);
 };

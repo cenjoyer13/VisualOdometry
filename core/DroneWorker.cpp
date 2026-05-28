@@ -35,7 +35,7 @@ void runDroneLogic(SharedContext* ctx) {
         client.armDisarm(true);
         client.takeoffAsync()->waitOnLastTask();
 
-        // Build the odometry pipeline from the YAML-loaded config provided by main().
+        // Pipeline is built from the YAML config that main() filled in.
         auto pipeline = OdometryPipeline::build(ctx->config);
 
         std::ofstream log_file(ctx->log_path);
@@ -57,7 +57,7 @@ void runDroneLogic(SharedContext* ctx) {
                 local_input = ctx->input;
             }
 
-            // --- 1. Image capture ---
+            // Image capture.
             std::vector<ImageCaptureBase::ImageRequest> request = {
                 ImageCaptureBase::ImageRequest("0", ImageCaptureBase::ImageType::Scene, false, false)
             };
@@ -98,7 +98,7 @@ void runDroneLogic(SharedContext* ctx) {
                 }
             }
 
-            // --- 2. Motion command (rate-limited to ~20 Hz) ---
+            // Motion command, rate-limited to ~20 Hz.
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_cmd_time).count() > 50) {
                 YawMode ym(true, local_input.yaw);
@@ -107,7 +107,7 @@ void runDroneLogic(SharedContext* ctx) {
                 last_cmd_time = now;
             }
 
-            // --- 3. Logging ---
+            // Logging.
             double loop_duration = std::chrono::duration_cast<std::chrono::microseconds>(now - loop_start).count();
             double fps = (loop_duration > 0) ? (1000000.0 / loop_duration) : 0.0;
             double time_s = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count() / 1000.0;

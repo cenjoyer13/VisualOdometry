@@ -5,8 +5,8 @@
 #include <opencv2/core/cuda.hpp>
 #endif
 
-// Custom deleter for our void pointer to safely destroy cv::cuda::GpuMat
-// without exposing the CUDA type to the rest of the project.
+// Deleter for the type-erased GpuMat pointer; lets DeviceBuffer hold a
+// shared_ptr<void> without leaking the CUDA type into the header.
 void cudaMatDeleter(void* ptr) {
 #ifdef HAS_CUDA
     delete static_cast<cv::cuda::GpuMat*>(ptr);
@@ -16,13 +16,12 @@ void cudaMatDeleter(void* ptr) {
 void DeviceBuffer::uploadToCUDA() {
 #ifdef HAS_CUDA
     if (location == BufferLocation::GPU_ONLY || location == BufferLocation::SYNCED) {
-        return; // Already in VRAM
+        return;
     }
-    
+
     cv::cuda::GpuMat* d_mat = new cv::cuda::GpuMat();
     d_mat->upload(cpu_mat);
-    
-    // Assign to shared_ptr with our custom deleter
+
     gpu_mat_ptr = std::shared_ptr<void>(d_mat, cudaMatDeleter);
     location = BufferLocation::SYNCED;
 #else
@@ -40,7 +39,7 @@ cv::Mat& DeviceBuffer::getAsCPU() {
 #endif
         location = BufferLocation::SYNCED;
     }
-    // Note: If data is in OpenCL (cv::UMat), OpenCV's Transparent API handles 
-    // the synchronization to cv::Mat automatically under the hood.
+    // OpenCL UMat path: the T-API materialises cv::Mat from the UMat on
+    // demand, so no explicit synchronisation is needed here.
     return cpu_mat;
 }

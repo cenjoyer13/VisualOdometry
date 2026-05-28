@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // --- Load trajectory ---
+    // Load the recorded trajectory.
     std::vector<Waypoint> waypoints;
     if (!loadTrajectory(traj_file, waypoints) || waypoints.size() < 2) {
         std::cerr << "Failed to load trajectory or too few waypoints: " << traj_file << "\n";
@@ -127,13 +127,13 @@ int main(int argc, char** argv) {
     }
     std::cout << "[PLAYER] Loaded " << waypoints.size() << " waypoints from " << traj_file << "\n";
 
-    // --- Load odometry config ---
+    // Load the odometry config and playback velocity from YAML.
     OdometryConfig config;
     float playback_velocity = 3.0f;
     if (!loadPlayerConfig(yaml_file, config, playback_velocity)) {
         return -1;
     }
-    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose
+    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose.
 
     if (config.backend == ComputeBackend::CUDA) {
         CudaPreload::init(config.verbose);
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
 
     auto pipeline = OdometryPipeline::build(config);
 
-    // --- Open output log ---
+    // Open the per-frame VO-vs-GT log.
     std::ofstream log("playback_log.csv");
     log << std::fixed << std::setprecision(6);
     log << "time_s,fps,"
@@ -195,13 +195,13 @@ int main(int argc, char** argv) {
         while (true) {
             auto loop_start = std::chrono::steady_clock::now();
 
-            // --- Image capture ---
+            // Image capture.
             std::vector<ImageCaptureBase::ImageRequest> req = {
                 ImageCaptureBase::ImageRequest("0", ImageCaptureBase::ImageType::Scene, false, false)
             };
             auto resp = client.simGetImages(req);
 
-            // --- Ground truth ---
+            // Ground truth from AirSim kinematics.
             MultirotorState state = client.getMultirotorState();
             const auto& q = state.kinematics_estimated.pose.orientation;
             const auto& p = state.kinematics_estimated.pose.position;
@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
             current_gt.orientation = cv::Vec3f(gt_pitch, gt_roll, gt_yaw);
             current_gt.position = cv::Vec3f(p.y(), p.x(), -p.z());
 
-            // --- Odometry ---
+            // Feed the latest frame through the VO pipeline.
             if (!resp.empty() && !resp[0].image_data_uint8.empty()) {
                 cv::Mat raw(resp[0].height, resp[0].width, CV_8UC3,
                             (void*)resp[0].image_data_uint8.data());
@@ -224,7 +224,7 @@ int main(int argc, char** argv) {
                 pipeline->processFrame(buf, current_gt);
             }
 
-            // --- VO state ---
+            // Current VO position in world frame.
             float vo_x = 0, vo_y = 0, vo_z = 0;
             if (pipeline->isTrackingActive()) {
                 cv::Mat T_VO = pipeline->getGlobalTransformVO();
@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
                 vo_z = T_VO.at<double>(2, 3);
             }
 
-            // --- Visualization ---
+            // Live overlays: 2D trajectory plot and feature-track view.
             if (pipeline->isTrackingActive()) {
                 cv::Vec3f est_xyz(vo_x, vo_y, vo_z);
                 cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
             if (key == 27) { aborted = true; break; }
             if (isKeyPressed(VK_ESCAPE)) { aborted = true; break; }
 
-            // --- Log ---
+            // Append a row to the CSV.
             auto now = std::chrono::steady_clock::now();
             double t_s = std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count() / 1000.0;
             double loop_us = std::chrono::duration_cast<std::chrono::microseconds>(now - loop_start).count();
@@ -265,7 +265,7 @@ int main(int argc, char** argv) {
             fflush(stdout);
             frame_id++;
 
-            // --- Completion check: close to last waypoint AND nearly stopped ---
+            // Completion check: close to the last waypoint and nearly stopped.
             double dx = p.x() - last_wp.x();
             double dy = p.y() - last_wp.y();
             double dz = p.z() - last_wp.z();

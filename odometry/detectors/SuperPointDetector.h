@@ -8,8 +8,7 @@
 class SuperPointDetector : public IFeatureDetector {
 private:
     OdometryConfig config;
-    
-    // ONNX Runtime ecosystem
+
     std::unique_ptr<Ort::Env> env;
     std::unique_ptr<Ort::Session> session;
     Ort::MemoryInfo memory_info_cpu;

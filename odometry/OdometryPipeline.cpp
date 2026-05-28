@@ -1,8 +1,7 @@
 #include "OdometryPipeline.h"
 #include <iostream>
-#include <chrono> // For timing
+#include <chrono>
 
-// Domain-Specific Factories
 #include "detectors/DetectorFactory.h"
 #include "matchers/MatcherFactory.h"
 #include "pose_estimators/PoseEstimatorFactory.h"
@@ -51,7 +50,7 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
 void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt) {
     auto t_start_total = std::chrono::high_resolution_clock::now();
 
-    // 1. Detect Features
+    // Detection.
     auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<cv::KeyPoint> curr_keypoints;
     DeviceBuffer curr_descriptors;
@@ -59,36 +58,37 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
     auto t1 = std::chrono::high_resolution_clock::now();
     metrics.time_detect_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-    // Bootstrap check
+    // Bootstrap: first frame has no predecessor to match against, so just
+    // store it and return.
     if (is_first_frame) {
         prev_image = frame;
         prev_descriptors = curr_descriptors;
         prev_keypoints = curr_keypoints;
         gt_prev = current_gt;
         is_first_frame = false;
-        
-        // Pass a blank image out for frame 0
+
+        // Debug frame for frame 0 is the raw input (no tracks to draw yet).
         debug_frame = frame.getAsCPU().clone();
         return;
     }
 
-    // 2. Match Features
+    // Matching.
     t0 = std::chrono::high_resolution_clock::now();
     std::vector<cv::DMatch> good_matches = matcher->match(
-        prev_descriptors, curr_descriptors, 
+        prev_descriptors, curr_descriptors,
         prev_keypoints, curr_keypoints
     );
     t1 = std::chrono::high_resolution_clock::now();
     metrics.time_match_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-    // --- NEW: Create the index map for the LBA backend ---
-    // Map format: current_point_index -> previous_point_index
+    // Build an index map for the LBA backend: matched_prev_idx[curr_idx]
+    // holds the matching index in the previous frame, or -1 if unmatched.
     std::vector<int> matched_prev_idx(curr_keypoints.size(), -1);
     for (const auto& match : good_matches) {
         matched_prev_idx[match.trainIdx] = match.queryIdx;
     }
 
-    // Translate DMatch indices to 2D geometric points
+    // Lift the cv::DMatch pairs into raw 2D points for the pose estimator.
     std::vector<cv::Point2f> pts_prev;
     std::vector<cv::Point2f> pts_curr;
     pts_prev.reserve(good_matches.size());
@@ -99,7 +99,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         pts_curr.push_back(curr_keypoints[match.trainIdx].pt);
     }
 
-    // --- VISUALIZATION: Draw tracked features ---
+    // Debug overlay: matched feature tracks on the input frame.
     cv::Mat color_frame;
     cv::Mat cpu_img = frame.getAsCPU();
     if (cpu_img.channels() == 1) {
@@ -108,7 +108,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         color_frame = cpu_img.clone();
     }
 
-    // 1. Draw the Bucketing Grid (If Enabled)
+    // Bucketing grid overlay (only when bucketing is enabled).
     if (config.bucketing_params.enabled) {
         int cols = config.bucketing_params.grid_cols;
         int rows = config.bucketing_params.grid_rows;
@@ -118,9 +118,8 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         float cell_w = static_cast<float>(width) / cols;
         float cell_h = static_cast<float>(height) / rows;
 
-        cv::Scalar grid_color(255, 50, 50); 
+        cv::Scalar grid_color(255, 50, 50);
 
-        // Draw vertical & horizontal lines
         for (int i = 1; i < cols; ++i) {
             int x = static_cast<int>(i * cell_w);
             cv::line(color_frame, cv::Point(x, 0), cv::Point(x, height), grid_color, 1, cv::LINE_AA);
@@ -131,15 +130,15 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         }
     }
 
-    // 2. Draw the Feature Tracks
+    // Feature tracks: red line from previous to current, green dot at current.
     for (size_t i = 0; i < pts_curr.size(); i++) {
         cv::line(color_frame, pts_prev[i], pts_curr[i], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
         cv::circle(color_frame, pts_curr[i], 3, cv::Scalar(0, 255, 0), -1, cv::LINE_AA);
     }
-    
-    debug_frame = color_frame; 
 
-    // 3. Pose Recovery
+    debug_frame = color_frame;
+
+    // Pose recovery.
     t0 = std::chrono::high_resolution_clock::now();
     cv::Mat R, t;
     bool pose_success = pose_estimator->estimatePose(pts_prev, pts_curr, config.intrinsics, R, t);
@@ -150,22 +149,23 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         double scale = scale_estimator->updateScale(gt_prev, current_gt);
         integrator->integrate(R, t, scale);
 
-        // Phase 3: push every frame to LBA so prev_frame_track_ids_ stays in
-        // sync with the frontend's match indexing. Stationary frames are
-        // marked so LBA collapses their BetweenFactor to a tight identity.
+        // Stationary tag: pose estimator returns a zero translation when it
+        // detects insufficient disparity. LBA uses this to collapse the
+        // BetweenFactor to a tight identity instead of treating it as motion.
         const double norm_t = cv::norm(t);
         const bool stationary = (norm_t <= 1e-6);
 
-        // Advance the frontend anchor every frame as well, so the next
-        // match's queryIdx refers to the keypoints we just pushed.
+        // Advance the frontend anchor before pushing to LBA so the next
+        // match's indices line up with what was just pushed.
         prev_image = frame;
         prev_descriptors = curr_descriptors;
         prev_keypoints = curr_keypoints;
 
         if (lba_ && !R.empty() && !t.empty()) {
             // Snapshot the integrator's world pose AFTER integrate() so the
-            // snapshot reflects the pose of this frame in the world. The LBA
-            // correction will be computed as a delta against this snapshot.
+            // snapshot reflects this frame's pose in the world. The LBA
+            // correction is later computed as a world-frame delta against
+            // this exact snapshot.
             const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
             integrator->snapshotPose(frame_id);
 
@@ -198,7 +198,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
     gt_prev = current_gt;
 
-    // Total Time & FPS
+    // Wall-clock totals and rolling FPS.
     auto t_end_total = std::chrono::high_resolution_clock::now();
     metrics.time_total_ms = std::chrono::duration<double, std::milli>(t_end_total - t_start_total).count();
     metrics.fps = 1000.0 / metrics.time_total_ms;

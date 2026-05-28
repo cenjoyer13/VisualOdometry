@@ -7,8 +7,8 @@ class IFeatureMatcher {
 public:
     virtual ~IFeatureMatcher() = default;
 
-    // Takes device-agnostic descriptors.
-    virtual std::vector<cv::DMatch> match(DeviceBuffer& desc_old, 
+    // Descriptors arrive as DeviceBuffer; concrete matcher decides where to run.
+    virtual std::vector<cv::DMatch> match(DeviceBuffer& desc_old,
                                           DeviceBuffer& desc_new,
                                           const std::vector<cv::KeyPoint>& kp_old,
                                           const std::vector<cv::KeyPoint>& kp_new) = 0;

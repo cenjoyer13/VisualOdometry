@@ -4,18 +4,18 @@
 #include <map>
 #include <string>
 
-// Enum for hardware acceleration routing
+// Backend routing tag carried on every detector/matcher.
 enum class ComputeBackend {
     CPU,
-    CUDA,    
-    OPENCL   
+    CUDA,
+    OPENCL
 };
 
-// State tracker for our memory abstraction
+// DeviceBuffer residency state.
 enum class BufferLocation {
     CPU_ONLY,
     GPU_ONLY,
-    SYNCED      
+    SYNCED
 };
 
 class DeviceBuffer {
@@ -31,23 +31,22 @@ public:
     explicit DeviceBuffer(const cv::Mat& cpu_data) 
         : cpu_mat(cpu_data.clone()), location(BufferLocation::CPU_ONLY) {}
         
-    explicit DeviceBuffer(const cv::UMat& ocl_data) 
+    explicit DeviceBuffer(const cv::UMat& ocl_data)
         : opencl_mat(ocl_data.clone()), location(BufferLocation::SYNCED) {
-        // Automatically sync to CPU memory as well
-        cpu_mat = opencl_mat.getMat(cv::ACCESS_READ).clone(); 
+        // Eager mirror to host memory; OpenCL UMat construction is rare enough
+        // that the upfront copy keeps later getAsCPU calls O(1).
+        cpu_mat = opencl_mat.getMat(cv::ACCESS_READ).clone();
     }
 
     BufferLocation getLocation() const { return location; }
 
-    // =========================================================
-    // LAZY SYNCHRONIZATION METHODS
-    // =========================================================
+    // Lazy synchronisation accessors.
 
-    // Declared here, implemented in OdometryTypes.cpp to hide CUDA headers
+    // Out-of-line so CUDA headers stay out of OdometryTypes.h.
     cv::Mat& getAsCPU();
-    void uploadToCUDA(); 
+    void uploadToCUDA();
 
-    // OpenCL fallback uses Transparent API, safe to inline
+    // OpenCL accessor is inlined: the T-API path has no CUDA dependency.
     cv::UMat& getAsOpenCL() {
         if (location == BufferLocation::CPU_ONLY) {
             cpu_mat.copyTo(opencl_mat);
@@ -72,26 +71,28 @@ struct BucketingConfig {
     int max_features_per_bucket = 20;
 };
 
-// All knobs exposed by LocalBundleAdjustment. Defaults match the values that
-// were previously hardcoded in LocalBundleAdjustment.cpp.
+// LocalBundleAdjustment tunables. Defaults are the values previously
+// hardcoded inside runOptimization; YAML overrides each field individually.
 struct LBAParams {
-    // Sliding-window mechanics
+    // Sliding-window mechanics.
     int window_size = 10;
     int opt_stride = 2;
 
-    // Tight prior on the oldest pose in the window — pins the gauge.
+    // Tight prior on the oldest pose in the window; pins the gauge so the
+    // optimizer cannot drift the window globally.
     double anchor_prior_sigma = 1e-4;
 
-    // Loose prior on the newest pose — caps the cumulative drift the
-    // SmartFactor chain is allowed to pull within one optimization.
+    // Loose prior on the newest pose; caps how far one pass is allowed to
+    // pull the trajectory before publishing.
     double end_prior_rot_sigma = 0.02;     // rad, per axis
-    double end_prior_trans_sigma = 0.20;   // m,  per axis
+    double end_prior_trans_sigma = 0.20;   // m, per axis
 
-    // BetweenFactor noise for moving frames.
+    // BetweenFactor noise on consecutive moving frames.
     double between_rot_sigma = 0.02;
     double between_trans_sigma = 0.05;
 
-    // BetweenFactor noise for stationary frames (identity measurement).
+    // Tighter BetweenFactor noise when the relative measurement is identity
+    // (stationary frame): trusts the no-motion observation more.
     double stationary_rot_sigma = 0.005;
     double stationary_trans_sigma = 0.01;
 
@@ -100,11 +101,13 @@ struct LBAParams {
     double rank_tolerance = 1e-5;
     double outlier_threshold = 3.0;        // post-triangulation reprojection cutoff (px)
 
-    // Per-track admission filter.
+    // Per-track admission filter: rejects tracks with too few observations
+    // or too little parallax to triangulate stably.
     int min_observations = 4;
     double min_bbox_diagonal = 25.0;       // pixel parallax floor
 
-    // Correction publishing acceptance.
+    // Correction-publishing gates. Optimizations that fall below
+    // min_smart_factors or produce a jump larger than the caps are dropped.
     int min_smart_factors = 50;
     double max_correction_translation = 0.5;  // m
     double max_correction_rotation_deg = 5.0;
@@ -118,7 +121,8 @@ struct OdometryConfig {
     std::string matcher_type = "FLANN";
 
     int num_threads = 1;
-    bool verbose = false;          // Global debug toggle (YAML system.verbose or CLI --debug).
+    // Global debug toggle, set by YAML system.verbose or CLI --debug.
+    bool verbose = false;
 
     bool use_local_ba = false;
     LBAParams lba_params;

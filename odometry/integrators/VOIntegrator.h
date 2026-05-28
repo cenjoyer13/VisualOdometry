@@ -13,10 +13,10 @@ class VOIntegrator : public ITrajectoryIntegrator {
 private:
     OdometryConfig config;
 
-    // 4x4 homogeneous transformation matrix — camera in world frame.
+    // 4x4 homogeneous transform, camera-in-world frame.
     cv::Mat T_VO;
 
-    // Bounded snapshot store for absolute-pose corrections. Hard cap by count.
+    // Bounded snapshot store for absolute-pose corrections; LRU by insertion.
     static constexpr size_t kMaxSnapshots = 64;
     std::unordered_map<uint64_t, cv::Mat> snapshots_;
     std::deque<uint64_t> snapshot_order_;

@@ -16,7 +16,8 @@
 #include "odometry/utils/CudaPreload.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
-// Math helper: Rotation Matrix to Quaternion
+// Rotation matrix to quaternion. Branch on the largest diagonal element to
+// keep the divisor well away from zero.
 void rot2quat(const cv::Mat& R, float& qx, float& qy, float& qz, float& qw) {
     double tr = R.at<double>(0,0) + R.at<double>(1,1) + R.at<double>(2,2);
     if (tr > 0) {
@@ -46,7 +47,7 @@ void rot2quat(const cv::Mat& R, float& qx, float& qy, float& qz, float& qw) {
     }
 }
 
-// ... [Keep extractEulerFromRotation and parseKittiPose unchanged] ...
+// Extract pitch/roll/yaw from a rotation matrix (KITTI convention).
 void extractEulerFromRotation(const cv::Mat& R, float& pitch, float& roll, float& yaw) {
     float sy = std::sqrt(R.at<double>(0,0) * R.at<double>(0,0) + R.at<double>(1,0) * R.at<double>(1,0));
     bool singular = sy < 1e-6;
@@ -100,8 +101,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Defaults — KITTI Seq 00 intrinsics, CPU backend. Anything present in
-    // the YAML overrides these.
+    // Defaults: KITTI Seq 00 intrinsics, CPU backend. YAML values overlay these.
     OdometryConfig config;
     config.backend = ComputeBackend::CPU;
     config.intrinsics = {718.856f, 718.856f, 607.192f, 185.215f};
@@ -112,10 +112,10 @@ int main(int argc, char** argv) {
         return -1;
     }
     loader.loadOdometryConfig(config);
-    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose
+    if (cli_debug) config.verbose = true;   // --debug overrides system.verbose.
 
-    // Bootstrap bundled CUDA / cuDNN libs so ONNX Runtime's CUDA EP can
-    // load even without a manual LD_LIBRARY_PATH export. No-op if CPU.
+    // Preload bundled CUDA / cuDNN libs so ONNX Runtime's CUDA EP loads
+    // without a manual LD_LIBRARY_PATH export. Skipped on non-CUDA backends.
     if (config.backend == ComputeBackend::CUDA) {
         CudaPreload::init(config.verbose);
     }
@@ -129,7 +129,6 @@ int main(int argc, char** argv) {
     std::string dataset_path = root_path + "/sequences/" + sequence + "/image_0";
     std::string poses_file = root_path + "/poses/" + sequence + ".txt";
 
-    // 2. Start Execution
     std::ifstream gt_stream(poses_file);
     if (!gt_stream.is_open()) {
         std::cerr << "Failed to open poses file: " << poses_file << "\n";
@@ -175,23 +174,23 @@ int main(int argc, char** argv) {
 
             log_file << frame_id << "," << pred_x << "," << pred_y << "," << pred_z << ","
                      << qx << "," << qy << "," << qz << "," << qw << "\n";
-                     
-            // --- NEW: Send current positions to the visualizer ---
+
+            // Push the latest estimate and GT into the 2D plot.
             cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
             cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
             cv::imshow("KITTI 2D Trajectory", traj_img);
         }
 
         const PipelineMetrics& m = pipeline->getMetrics();
-	// Compacted string (~55 characters) to completely avoid 80-column line-wrapping
-        printf("\r[%04d] Det:%4.0fms | Mat:%4.0fms | Pos:%3.0fms | Tot:%4.0fms | FPS:%4.1f   ", 
-               frame_id, 
-               m.time_detect_ms, 
-               m.time_match_ms, 
-               m.time_pose_ms, 
-               m.time_total_ms, 
+        // Compact single-line status; widths chosen to stay under one terminal row.
+        printf("\r[%04d] Det:%4.0fms | Mat:%4.0fms | Pos:%3.0fms | Tot:%4.0fms | FPS:%4.1f   ",
+               frame_id,
+               m.time_detect_ms,
+               m.time_match_ms,
+               m.time_pose_ms,
+               m.time_total_ms,
                m.fps);
-        fflush(stdout); // Manually command the OS to dump the buffer
+        fflush(stdout);
 
         cv::Mat vis = pipeline->getDebugFrame();
         if (!vis.empty()) {

@@ -48,9 +48,9 @@ void VOIntegrator::integrate(const cv::Mat& local_R, const cv::Mat& local_t, dou
     local_R.convertTo(R_64, CV_64F);
     local_t.convertTo(t_64, CV_64F);
 
-    // PoseEstimator returns (R, t) such that x_curr = R*x_prev + t
-    // (i.e. T_curr_prev). To track the camera in world frame we want
-    // T_prev_curr = inverse.
+    // Convention: the pose estimator returns (R, t) as T_curr_prev, meaning
+    // x_curr = R*x_prev + t. World-frame accumulation needs T_prev_curr, so
+    // invert by transposing R and negating R^T * t.
     cv::Mat R_cam = R_64.t();
     cv::Mat t_cam = -R_cam * t_64;
     cv::Mat scaled_t = t_cam * scale;

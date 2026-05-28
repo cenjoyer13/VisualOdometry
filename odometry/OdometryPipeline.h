@@ -2,8 +2,7 @@
 #include <memory>
 #include <vector>
 #include <opencv2/core.hpp>
-// Include highgui for colors (if not already included)
-#include <opencv2/imgproc.hpp> 
+#include <opencv2/imgproc.hpp>
 
 #include "OdometryTypes.h"
 #include "detectors/IFeatureDetector.h"
@@ -23,7 +22,7 @@ private:
     std::vector<cv::KeyPoint> prev_keypoints;
     GroundTruthData gt_prev;
 
-    // --- NEW: Logging & Visualization ---
+    // Per-frame metrics and the last-rendered debug overlay.
     PipelineMetrics metrics;
     cv::Mat debug_frame;
 
@@ -32,13 +31,9 @@ private:
     std::unique_ptr<IPoseEstimator> pose_estimator;
     std::unique_ptr<IScaleEstimator> scale_estimator;
     std::unique_ptr<ITrajectoryIntegrator> integrator;
-    
+
     std::unique_ptr<LocalBundleAdjustment> lba_;
     int current_frame_id_ = 0;
-
-    int next_track_id_ = 0;
-    std::vector<int> prev_track_ids_; // Stores the IDs of the keypoints in the previous frame
-      
 
 public:
     ~OdometryPipeline();
@@ -57,7 +52,6 @@ public:
     cv::Mat getGlobalTransformVO() const;
     bool isTrackingActive() const;
 
-    // --- NEW: Accessors ---
     const PipelineMetrics& getMetrics() const { return metrics; }
     cv::Mat getDebugFrame() const { return debug_frame; }
 };

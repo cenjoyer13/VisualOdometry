@@ -7,8 +7,7 @@
 class SIFTDetector : public IFeatureDetector {
 private:
     OdometryConfig config;
-    
-    // Changed from sift_cpu to unified 'sift'
+
     cv::Ptr<cv::SIFT> sift;
 
     int nfeatures;

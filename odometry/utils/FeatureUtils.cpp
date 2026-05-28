@@ -11,9 +11,9 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
                                      int num_threads) 
 {
     int total_rois = config.grid_rows * config.grid_cols;
-    
-    // Fallback to serial if threads = 1
-    int active_threads = std::max(1, std::min(num_threads, total_rois)); 
+
+    // Clamp to one thread per ROI; degenerates to serial when num_threads is 1.
+    int active_threads = std::max(1, std::min(num_threads, total_rois));
     int rois_per_thread = total_rois / active_threads;
 
     using ThreadResult = std::pair<std::vector<cv::KeyPoint>, cv::Mat>;
@@ -23,9 +23,9 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
         int start_idx = t * rois_per_thread;
         int end_idx = (t == active_threads - 1) ? total_rois : start_idx + rois_per_thread;
 
-        // Launch async worker
         futures.push_back(std::async(std::launch::async, [start_idx, end_idx, &image, &config, detector_builder]() {
-            // Build a thread-local detector to prevent race conditions
+            // cv::Feature2D instances are not thread-safe: each worker gets
+            // its own via the builder callback.
             cv::Ptr<cv::Feature2D> local_detector = detector_builder();
             std::vector<cv::KeyPoint> local_kps;
             cv::Mat local_desc;
@@ -49,7 +49,7 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
 
                 if (cell_kps.empty()) continue;
 
-                // Sort by response
+                // Rank by response and keep the top-N per cell.
                 std::vector<int> indices(cell_kps.size());
                 std::iota(indices.begin(), indices.end(), 0);
                 std::sort(indices.begin(), indices.end(), [&cell_kps](int a, int b) {
@@ -60,7 +60,8 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
                 for (int j = 0; j < keep; ++j) {
                     int orig_idx = indices[j];
                     cv::KeyPoint kp = cell_kps[orig_idx];
-                    kp.pt.x += roi.x; 
+                    // Translate from ROI-local to full-image coordinates.
+                    kp.pt.x += roi.x;
                     kp.pt.y += roi.y;
                     local_kps.push_back(kp);
 
@@ -75,7 +76,7 @@ void FeatureUtils::detectWithGridCPU(const std::function<cv::Ptr<cv::Feature2D>(
         }));
     }
 
-    // Safely collect and merge all thread results
+    // Merge per-worker results into the output.
     for (auto& f : futures) {
         ThreadResult res = f.get();
         out_keypoints.insert(out_keypoints.end(), res.first.begin(), res.first.end());
@@ -101,10 +102,9 @@ void FeatureUtils::filterByGrid(
     float cell_w = static_cast<float>(image_width) / cols;
     float cell_h = static_cast<float>(image_height) / rows;
 
-    // Create a 2D grid of vectors to hold indices of keypoints
+    // Per-cell index buckets.
     std::vector<std::vector<std::vector<int>>> grid(rows, std::vector<std::vector<int>>(cols));
 
-    // Place each keypoint index into its corresponding bucket
     for (int i = 0; i < in_kpts.size(); ++i) {
         int col_idx = std::min(static_cast<int>(in_kpts[i].pt.x / cell_w), cols - 1);
         int row_idx = std::min(static_cast<int>(in_kpts[i].pt.y / cell_h), rows - 1);
@@ -114,12 +114,12 @@ void FeatureUtils::filterByGrid(
     out_kpts.clear();
     std::vector<int> final_indices;
 
-    // Sort each bucket by response (score) and keep the top N
+    // Per cell: rank by response, keep top-N. Index lists carry the survivors
+    // so the descriptor matrix can be reassembled in one pass below.
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
             auto& cell_indices = grid[r][c];
-            
-            // Sort indices descending based on keypoint response
+
             std::sort(cell_indices.begin(), cell_indices.end(), [&](int a, int b) {
                 return in_kpts[a].response > in_kpts[b].response;
             });
@@ -133,7 +133,7 @@ void FeatureUtils::filterByGrid(
         }
     }
 
-    // Construct the new dense descriptor matrix containing only the survivors
+    // Rebuild a dense descriptor matrix holding only the surviving rows.
     out_desc = cv::Mat(final_indices.size(), in_desc.cols, in_desc.type());
     for (size_t i = 0; i < final_indices.size(); ++i) {
         in_desc.row(final_indices[i]).copyTo(out_desc.row(i));

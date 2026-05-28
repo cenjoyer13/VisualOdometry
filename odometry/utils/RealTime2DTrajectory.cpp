@@ -7,46 +7,52 @@ RealTime2DTrajectory::RealTime2DTrajectory(float scale) : w(800), h(800), scale(
 }
 
 cv::Mat RealTime2DTrajectory::update(const cv::Vec3f& est_xyz, const cv::Vec3f& gt_xyz) {
-    // KITTI Top-Down View: X is Right/Left, Z is Forward/Backward.
+    // KITTI top-down view: X is left/right, Z is forward/backward.
     double x = est_xyz[0];
-    double z = est_xyz[2]; 
+    double y = est_xyz[1];
+    double z = est_xyz[2];
     double gt_x = gt_xyz[0];
+    double gt_y = gt_xyz[1];
     double gt_z = gt_xyz[2];
 
-    // 1. Calculate live 2D MAE (Mean Absolute Error)
-    double error = cv::norm(cv::Vec2d(x, z) - cv::Vec2d(gt_x, gt_z));
-    errors.push_back(error);
+    // In-plane error: Euclidean distance in the displayed (X, Z) plane.
+    double err_2d = cv::norm(cv::Vec2d(x, z) - cv::Vec2d(gt_x, gt_z));
+    errors_2d.push_back(err_2d);
 
-    double sum_error = std::accumulate(errors.begin(), errors.end(), 0.0);
-    double avg_error = sum_error / errors.size();
+    // Full 3D error includes the Y component the plot drops.
+    double err_3d = cv::norm(cv::Vec3d(x, y, z) - cv::Vec3d(gt_x, gt_y, gt_z));
+    errors_3d.push_back(err_3d);
 
-    // Offset: Centers the start point.
+    double avg_2d = std::accumulate(errors_2d.begin(), errors_2d.end(), 0.0) / errors_2d.size();
+    double avg_3d = std::accumulate(errors_3d.begin(), errors_3d.end(), 0.0) / errors_3d.size();
+
+    // Centre the origin in the image.
     int offset_x = w / 2;
     int offset_y = h / 2;
 
-    // Draw trajectory moving "up" the screen by subtracting the Z-axis scaling
+    // Image Y grows downward; subtract Z so forward motion draws upward.
     int draw_x = static_cast<int>(x * scale) + offset_x;
     int draw_y = offset_y - static_cast<int>(z * scale);
     int true_x = static_cast<int>(gt_x * scale) + offset_x;
     int true_y = offset_y - static_cast<int>(gt_z * scale);
 
-    // Draw Visual Odometry (Green)
+    // VO path in green, GT in red.
     cv::circle(traj, cv::Point(draw_x, draw_y), 1, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
-
-    // Draw Ground Truth (Red)
     cv::circle(traj, cv::Point(true_x, true_y), 1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
 
-    // Legend and Text Background
-    cv::rectangle(traj, cv::Point(10, 20), cv::Point(600, 80), cv::Scalar(0, 0, 0), -1);
+    // Legend background.
+    cv::rectangle(traj, cv::Point(10, 20), cv::Point(600, 100), cv::Scalar(0, 0, 0), -1);
 
-    // Display the current scale on the UI
+    // Two error lines plus the legend.
     char text[256];
-    snprintf(text, sizeof(text), "AvgError: %2.4fm | Scale: %.1fx", avg_error, scale);
+    snprintf(text, sizeof(text), "Avg Err (X-Z plane): %2.4f m", avg_2d);
     cv::putText(traj, text, cv::Point(20, 40), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_8);
 
-    // Legend Colors
-    cv::putText(traj, "VO (Green)", cv::Point(20, 60), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 255, 0), 1);
-    cv::putText(traj, "GT (Red)", cv::Point(150, 60), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1);
+    snprintf(text, sizeof(text), "Avg Err (3D):        %2.4f m   | Scale: %.1fx", avg_3d, scale);
+    cv::putText(traj, text, cv::Point(20, 60), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(255, 255, 255), 1, cv::LINE_8);
+
+    cv::putText(traj, "VO (Green)", cv::Point(20, 85), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 255, 0), 1);
+    cv::putText(traj, "GT (Red)",   cv::Point(150, 85), cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 0, 255), 1);
 
     return traj;
 }

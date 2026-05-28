@@ -16,10 +16,8 @@ void SuperPointDetector::initializeSession() {
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options.SetLogSeverityLevel(3);
 
-    // ==========================================
-    // 1. HARDWARE CAPABILITY RESOLVER
-    // Strict Cascade: CUDA -> CPU (ONNX does not natively support OpenCL)
-    // ==========================================
+    // Hardware cascade: CUDA -> CPU. ONNX Runtime has no native OpenCL EP,
+    // so OPENCL collapses straight to CPU.
     ComputeBackend target_backend = config.backend;
 
     if (target_backend == ComputeBackend::OPENCL) {
@@ -49,8 +47,9 @@ void SuperPointDetector::initializeSession() {
     }
 
     try {
-        // Ensure you have this model exported and placed alongside lightglue!
-        std::string model_path = "models/superpoint.onnx"; 
+        // Model path is resolved against the process CWD; the binary expects
+        // a "models/" directory next to it (build/models/superpoint.onnx).
+        std::string model_path = "models/superpoint.onnx";
         session = std::make_unique<Ort::Session>(*env, model_path.c_str(), session_options);
     } catch (const Ort::Exception& e) {
         std::cerr << "[SuperPoint] CRITICAL ERROR: Could not load models/superpoint.onnx" << std::endl;
@@ -63,7 +62,7 @@ void SuperPointDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& 
         initializeSession();
     }
 
-    // 1. Preprocess Image for SuperPoint (Float32, Grayscale, 1x1xHxW)
+    // Preprocess: SuperPoint wants float32 grayscale, shape [1, 1, H, W].
     cv::Mat cpu_img = image.getAsCPU();
     cv::Mat gray_img;
     if (cpu_img.channels() == 3) {
@@ -87,56 +86,56 @@ void SuperPointDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& 
     const char* input_names[] = {"image"};
     const char* output_names[] = {"keypoints", "scores", "descriptors"};
 
-    // 2. Execute GPU Inference (Whole Image)
+    // Inference on the whole image; backend depends on the selected EP above.
     std::vector<cv::KeyPoint> raw_keypoints;
     cv::Mat raw_descriptors;
 
     try {
         auto output_tensors = session->Run(Ort::RunOptions{nullptr}, input_names, input_tensors.data(), 1, output_names, 3);
 
-        // Extract Keypoints [N, 2]
+        // Keypoints: [N, 2]. Some exports emit [1, N, 2] with a batch dim.
         float* kpts_ptr = output_tensors[0].GetTensorMutableData<float>();
         auto kpts_shape = output_tensors[0].GetTensorTypeAndShapeInfo().GetShape();
-        int num_kpts = kpts_shape[0]; // Assuming standard SuperPoint ONNX output shape [N, 2] or [1, N, 2]
-        if (kpts_shape.size() == 3) num_kpts = kpts_shape[1]; 
+        int num_kpts = kpts_shape[0];
+        if (kpts_shape.size() == 3) num_kpts = kpts_shape[1];
 
-        // Extract Scores [N]
+        // Scores: [N].
         float* scores_ptr = output_tensors[1].GetTensorMutableData<float>();
 
-        // Extract Descriptors [N, 256]
+        // Descriptors: [N, 256]. Cloned because the Ort::Value memory dies
+        // with output_tensors at the end of the try block.
         float* desc_ptr = output_tensors[2].GetTensorMutableData<float>();
-        raw_descriptors = cv::Mat(num_kpts, 256, CV_32F, desc_ptr).clone(); // Clone to preserve after Ort::Value dies
+        raw_descriptors = cv::Mat(num_kpts, 256, CV_32F, desc_ptr).clone();
 
         raw_keypoints.reserve(num_kpts);
         for (int i = 0; i < num_kpts; ++i) {
             float x = kpts_ptr[i * 2 + 0];
             float y = kpts_ptr[i * 2 + 1];
             float score = scores_ptr[i];
-            raw_keypoints.emplace_back(cv::Point2f(x, y), 8.0f, -1, score); // Default size 8
+            // Size 8 px is the default neighbourhood reported back to OpenCV;
+            // SuperPoint itself does not produce a scale per keypoint.
+            raw_keypoints.emplace_back(cv::Point2f(x, y), 8.0f, -1, score);
         }
     } catch (const Ort::Exception& e) {
         std::cerr << "[SuperPoint] Inference Error: " << e.what() << std::endl;
         return;
     }
 
-    // ==========================================
-    // 3. POST-DETECTION LOGIC (Bucketing)
-    // ==========================================
+    // Optional bucketing pass: prunes the dense SuperPoint output to a
+    // spatially-even grid before handing it to the matcher.
     if (config.bucketing_params.enabled && !raw_keypoints.empty()) {
         std::vector<cv::KeyPoint> bucketed_kpts;
         cv::Mat bucketed_desc;
-        
-        // Filter the dense GPU outputs into an even spatial grid
+
         FeatureUtils::filterByGrid(
-            raw_keypoints, raw_descriptors, 
-            bucketed_kpts, bucketed_desc, 
+            raw_keypoints, raw_descriptors,
+            bucketed_kpts, bucketed_desc,
             width, height, config.bucketing_params
         );
 
         out_keypoints = bucketed_kpts;
         out_descriptors = DeviceBuffer(bucketed_desc);
     } else {
-        // Bypass filtering
         out_keypoints = raw_keypoints;
         out_descriptors = DeviceBuffer(raw_descriptors);
     }

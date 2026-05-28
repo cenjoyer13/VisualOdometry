@@ -7,9 +7,9 @@ class IFeatureDetector {
 public:
     virtual ~IFeatureDetector() = default;
 
-    // Takes a device-agnostic image, outputs device-agnostic descriptors.
-    // Keypoints are kept as std::vector since they are tiny (few KB) and 
-    // usually needed on the CPU for pose estimation math anyway.
+    // I/O: DeviceBuffer for image and descriptors keeps the interface
+    // backend-agnostic. Keypoints stay as a host std::vector; they are
+    // small and pose estimation consumes them on the CPU.
     virtual void detect(DeviceBuffer& image, 
                         std::vector<cv::KeyPoint>& out_keypoints, 
                         DeviceBuffer& out_descriptors) = 0;

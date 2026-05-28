@@ -1,0 +1,52 @@
+%YAML:1.0
+
+dataset:
+  root_path: ../../../VO-datasets/KITTI/data_odometry_gray/dataset
+  sequence: '00'
+
+detector:
+  type: ORB
+  ORB:
+    nfeatures: 3000
+    scaleFactor: 1.2
+    nLevels: 8
+    edgeThreshold: 19
+    firstLevel: 0
+    WTA_K: 2
+    patchSize: 31
+    fastThreshold: 7
+
+matcher:
+  type: Kinematic
+  distance_ratio: 0.70
+
+bucketing:
+  enabled: 1
+  grid_cols: 6
+  grid_rows: 3
+  max_features_per_bucket: 120
+
+local_bundle_adjustment:
+  enabled: 1
+  window_size: 10
+  opt_stride: 2
+  anchor_prior_sigma: 1e-4
+  end_prior_rot_sigma: 0.02
+  end_prior_trans_sigma: 0.20
+  between_rot_sigma: 0.03
+  between_trans_sigma: 0.08
+  stationary_rot_sigma: 0.005
+  stationary_trans_sigma: 0.01
+  pixel_sigma: 1.5
+  rank_tolerance: 1.0e-5
+  outlier_threshold: 3.0
+  min_observations: 3
+  min_bbox_diagonal: 20.0
+  min_smart_factors: 40
+  max_correction_translation: 0.5
+  max_correction_rotation_deg: 5.0
+
+system:
+  backend: CPU
+  num_threads: 12
+  verbose: 0

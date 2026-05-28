@@ -1,7 +1,7 @@
 #include "CustomCheiralityPoseEstimator.h"
 #include <opencv2/calib3d.hpp>
 #include <iostream>
-#include <mutex> // Required for thread-safe hypothesis comparison
+#include <mutex>
 
 CustomCheiralityPoseEstimator::CustomCheiralityPoseEstimator(const OdometryConfig& cfg) : config(cfg) {}
 
@@ -54,12 +54,13 @@ bool CustomCheiralityPoseEstimator::estimatePose(
     cv::Mat R1, R2, t;
     cv::decomposeEssentialMat(E, R1, R2, t);
 
-    // 6. MULTITHREADED Custom Cheirality Check
+    // Four hypotheses from the essential-matrix decomposition; pick the one
+    // that places the most triangulated points in front of both cameras.
     std::vector<cv::Mat> Rs = {R1, R1, R2, R2};
     std::vector<cv::Mat> ts = {t, -t, t, -t};
 
     cv::Mat P1 = cv::Mat::eye(3, 4, CV_64F);
-    P1 = K * P1; 
+    P1 = K * P1;
 
     cv::Mat P1_32F; P1.convertTo(P1_32F, CV_32F);
     cv::Mat K_32F;  K.convertTo(K_32F, CV_32F);
@@ -67,13 +68,13 @@ bool CustomCheiralityPoseEstimator::estimatePose(
     int max_valid_points = -1;
     cv::Mat best_R = cv::Mat::eye(3, 3, CV_64F);
     cv::Mat best_t = cv::Mat::zeros(3, 1, CV_64F);
-    std::mutex best_mutex; // Protects shared state across threads
+    std::mutex best_mutex;
 
-    // Execute the 4 triangulation hypotheses concurrently
+    // Run the four hypotheses in parallel; each computes its own valid count.
     cv::setNumThreads(config.num_threads);
     cv::parallel_for_(cv::Range(0, 4), [&](const cv::Range& range) {
         for (int i = range.start; i < range.end; ++i) {
-            
+
             cv::Mat P2(3, 4, CV_64F);
             Rs[i].copyTo(P2(cv::Rect(0, 0, 3, 3)));
             ts[i].copyTo(P2(cv::Rect(3, 0, 1, 3)));
@@ -83,31 +84,32 @@ bool CustomCheiralityPoseEstimator::estimatePose(
 
             cv::Mat points_4D;
             cv::triangulatePoints(P1_32F, P2_32F, pts_old, pts_new, points_4D);
-            points_4D.convertTo(points_4D, CV_64F); 
+            points_4D.convertTo(points_4D, CV_64F);
 
             int valid_points = 0;
 
-            // Pre-extract matrix values to eliminate cv::Mat allocations in the loop
+            // Hoist the bottom row of R and the z component of t out of the
+            // inner loop so the hot path avoids cv::Mat indexing overhead.
             double r20 = Rs[i].at<double>(2, 0);
             double r21 = Rs[i].at<double>(2, 1);
             double r22 = Rs[i].at<double>(2, 2);
             double tz  = ts[i].at<double>(2, 0);
 
             for (int j = 0; j < points_4D.cols; ++j) {
-                double w = points_4D.at<double>(3, j) + 1e-8; 
+                double w = points_4D.at<double>(3, j) + 1e-8;
                 double z1 = points_4D.at<double>(2, j) / w;
 
-                // Ultra-fast Math: Directly calculate Z2 without allocating a 3x1 Matrix
+                // z2 directly from the third row of [R|t] applied to the
+                // dehomogenised point; avoids allocating a per-point 3x1.
                 double x1 = points_4D.at<double>(0, j) / w;
                 double y1 = points_4D.at<double>(1, j) / w;
                 double z2 = (r20 * x1) + (r21 * y1) + (r22 * z1) + tz;
-                
+
                 if (z1 > min_depth && z1 < max_depth && z2 > min_depth && z2 < max_depth) {
                     valid_points++;
                 }
             }
 
-            // Thread-safe update of the winning hypothesis
             std::lock_guard<std::mutex> lock(best_mutex);
             if (valid_points > max_valid_points) {
                 max_valid_points = valid_points;
