@@ -1,0 +1,39 @@
+%YAML:1.0
+
+camera:
+  fx: 320.0
+  fy: 320.0
+  cx: 320.0
+  cy: 240.0
+
+detector:
+  type: SuperPoint
+
+matcher:
+  type: FLANN
+  FLANN:
+    kdTrees: 5
+    searchChecks: 50
+  distance_ratio: 0.75
+
+bucketing:
+  enabled: 1
+  grid_cols: 6
+  grid_rows: 3
+  max_features_per_bucket: 70
+
+local_bundle_adjustment:
+  enabled: 1
+  window_size: 10
+  pixel_sigma: 0.5
+  between_rot_sigma: 0.01
+  between_trans_sigma: 0.02
+  outlier_threshold: 1.5
+
+system:
+  backend: CUDA
+  num_threads: 12
+  verbose: 0
+
+airsim:
+  playback_velocity: 3.0

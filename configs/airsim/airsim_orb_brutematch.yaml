@@ -1,0 +1,41 @@
+%YAML:1.0
+
+camera:
+  fx: 320.0
+  fy: 320.0
+  cx: 320.0
+  cy: 240.0
+
+detector:
+  type: ORB
+  ORB:
+    nfeatures: 3000
+    scaleFactor: 1.2
+    nLevels: 8
+    edgeThreshold: 19
+    firstLevel: 0
+    WTA_K: 2
+    patchSize: 31
+    fastThreshold: 7
+
+matcher:
+  type: Kinematic
+  distance_ratio: 0.70
+
+bucketing:
+  enabled: 1
+  grid_cols: 6
+  grid_rows: 3
+  max_features_per_bucket: 120
+
+local_bundle_adjustment:
+  enabled: 0
+  window_size: 10
+
+system:
+  backend: CPU
+  num_threads: 12
+  verbose: 0
+
+airsim:
+  playback_velocity: 3.0
