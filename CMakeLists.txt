@@ -113,6 +113,58 @@ if(UNIX)
 endif()
 
 # =========================================================================
+# RosbagEvaluator — Linux-only, opt-in via -DROS_ROOT=<ROS Noetic install>.
+#
+# Replays a ROS1 bag through the odometry pipeline. Mirrors KittiEvaluator's
+# CSV log schema. Needs rosbag + roscpp_serialization + sensor_msgs headers
+# from a ROS Noetic install (system /opt/ros/noetic or a robostack conda
+# env). Skipped silently when ROS_ROOT is unset.
+# =========================================================================
+set(ROS_ROOT "" CACHE PATH "Path to ROS Noetic install root (enables RosbagEvaluator)")
+if(UNIX AND ROS_ROOT)
+    find_library(ROSBAG_LIB           rosbag                 PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(ROSBAG_STORAGE_LIB   rosbag_storage         PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(ROSCPP_SER_LIB       roscpp_serialization   PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(ROSTIME_LIB          rostime                PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(ROSCONSOLE_LIB       rosconsole             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(CPP_COMMON_LIB       cpp_common             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+
+    if(ROSBAG_LIB AND ROSBAG_STORAGE_LIB AND ROSCPP_SER_LIB AND ROSTIME_LIB)
+        message(STATUS "ROS integration enabled — building RosbagEvaluator.")
+        message(STATUS "  ROS_ROOT: ${ROS_ROOT}")
+
+        add_executable(RosbagEvaluator
+            main_rosbag.cpp
+            ${SRC_ODOMETRY}
+        )
+        target_include_directories(RosbagEvaluator PRIVATE ${ROS_ROOT}/include)
+        target_link_libraries(RosbagEvaluator PRIVATE
+            ${OpenCV_LIBS}
+            ${ONNXRUNTIME_LIB}
+            gtsam
+            ${ROSBAG_LIB}
+            ${ROSBAG_STORAGE_LIB}
+            ${ROSCPP_SER_LIB}
+            ${ROSTIME_LIB}
+            ${ROSCONSOLE_LIB}
+            ${CPP_COMMON_LIB}
+            ${CMAKE_DL_LIBS}
+        )
+        # RPATH so the binary can find both ONNX RT / cuDNN AND the ROS libs
+        # without LD_LIBRARY_PATH gymnastics.
+        set_target_properties(RosbagEvaluator PROPERTIES
+            INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${ROS_ROOT}/lib"
+            BUILD_WITH_INSTALL_RPATH TRUE)
+    else()
+        message(WARNING "ROS_ROOT set but rosbag libraries not found under ${ROS_ROOT}/lib — skipping RosbagEvaluator.")
+    endif()
+else()
+    if(UNIX)
+        message(STATUS "RosbagEvaluator skipped: pass -DROS_ROOT=<ROS Noetic root> to enable.")
+    endif()
+endif()
+
+# =========================================================================
 # AirSim-dependent targets: PathRecorder + PathPlayer + FreeplayDrone.
 #
 # All three use Win32 APIs (GetAsyncKeyState, VK_* constants) and AirSim

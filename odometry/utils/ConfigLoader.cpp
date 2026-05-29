@@ -146,3 +146,18 @@ bool ConfigLoader::loadPlaybackVelocity(float& out_velocity) {
     out_velocity = (float)airsim["playback_velocity"];
     return true;
 }
+
+bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
+    if (!fs.isOpened()) return false;
+    cv::FileNode n = fs["rosbag"];
+    if (n.empty() || n["bag_path"].empty()) return false;
+
+    out.bag_path = (std::string)n["bag_path"];
+    if (!n["img_topic"].empty())  out.img_topic = (std::string)n["img_topic"];
+    if (!n["gps_topic"].empty())  out.gps_topic = (std::string)n["gps_topic"];
+    if (!n["imu_topic"].empty())  out.imu_topic = (std::string)n["imu_topic"];
+    if (!n["ppk_path"].empty())   out.ppk_path  = (std::string)n["ppk_path"];
+    if (!n["start_time"].empty()) out.start_time = (double)n["start_time"];
+    if (!n["end_time"].empty())   out.end_time   = (double)n["end_time"];
+    return true;
+}

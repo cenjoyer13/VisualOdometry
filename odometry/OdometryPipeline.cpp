@@ -160,6 +160,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         prev_image = frame;
         prev_descriptors = curr_descriptors;
         prev_keypoints = curr_keypoints;
+        gt_prev = current_gt;
 
         if (lba_ && !R.empty() && !t.empty()) {
             // Snapshot the integrator's world pose AFTER integrate() so the
@@ -195,8 +196,6 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
         current_frame_id_++;
     }
-
-    gt_prev = current_gt;
 
     // Wall-clock totals and rolling FPS.
     auto t_end_total = std::chrono::high_resolution_clock::now();
