@@ -125,10 +125,13 @@ set(AIRSIM_INCLUDE_DIRS "" CACHE STRING "Explicit AirSim include dirs (overrides
 set(AIRSIM_LIBS "" CACHE STRING "Explicit AirSim libraries (e.g. AirLib;rpc)")
 
 if(AIRSIM_ROOT AND NOT AIRSIM_INCLUDE_DIRS)
+    # AirSim ships an old Eigen 3.3 under AirLib/deps/eigen3. GTSAM 4.3 was
+    # built against bundled Eigen 3.4 and emits a static_assert when it
+    # detects the version mismatch. We deliberately omit AirSim's eigen3
+    # path so the project uses GTSAM's Eigen via its exported include dirs.
     set(AIRSIM_INCLUDE_DIRS
         ${AIRSIM_ROOT}/AirLib/include
         ${AIRSIM_ROOT}/AirLib/deps/rpclib/include
-        ${AIRSIM_ROOT}/AirLib/deps/eigen3
         ${AIRSIM_ROOT}/MavLinkCom/include
     )
 endif()
@@ -154,7 +157,12 @@ if(WIN32 AND AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
 
     # ----- PathRecorder: WASD flight in AirSim, logs GT trajectory CSV -----
     add_executable(PathRecorder main_recorder.cpp)
-    target_include_directories(PathRecorder PRIVATE ${AIRSIM_INCLUDE_DIRS})
+    # PathRecorder doesn't link gtsam, so it can use AirSim's bundled Eigen 3.3
+    # directly. PathPlayer / FreeplayDrone get Eigen 3.4 transitively from gtsam.
+    target_include_directories(PathRecorder PRIVATE
+        ${AIRSIM_INCLUDE_DIRS}
+        ${AIRSIM_ROOT}/AirLib/deps/eigen3
+    )
     target_link_libraries(PathRecorder PRIVATE
         ${OpenCV_LIBS}
         ${AIRSIM_LIBS}

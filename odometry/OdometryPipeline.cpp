@@ -146,57 +146,74 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
     metrics.time_pose_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     if (pose_success) {
-        double scale = scale_estimator->updateScale(gt_prev, current_gt);
-        integrator->integrate(R, t, scale);
-
-        // Stationary tag: pose estimator returns a zero translation when it
-        // detects insufficient disparity. LBA uses this to collapse the
-        // BetweenFactor to a tight identity instead of treating it as motion.
+        // Stationary tag: the pose estimator returns a zero translation when
+        // matches are too few, average pixel disparity is below the
+        // min_disparity threshold, or the essential-matrix decomposition is
+        // degenerate. In those cases the geometric (R, t) is meaningless and
+        // must NOT be fed to the integrator.
         const double norm_t = cv::norm(t);
         const bool stationary = (norm_t <= 1e-6);
 
-        // Advance the frontend anchor before pushing to LBA so the next
-        // match's indices line up with what was just pushed.
-        prev_image = frame;
-        prev_descriptors = curr_descriptors;
-        prev_keypoints = curr_keypoints;
+        if (!stationary) {
+            // Scale is the GT-distance between the LAST non-stationary anchor
+            // (gt_prev) and now. If the previous frames were flagged
+            // stationary, this delta correctly spans every skipped frame, so
+            // the integrated VO step covers the same physical distance that
+            // GT covered while VO was frozen.
+            double scale = scale_estimator->updateScale(gt_prev, current_gt);
+            integrator->integrate(R, t, scale);
 
-        if (lba_ && !R.empty() && !t.empty()) {
-            // Snapshot the integrator's world pose AFTER integrate() so the
-            // snapshot reflects this frame's pose in the world. The LBA
-            // correction is later computed as a world-frame delta against
-            // this exact snapshot.
-            const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
-            integrator->snapshotPose(frame_id);
+            // Advance the frontend anchor before pushing to LBA so the next
+            // match's indices line up with what was just pushed.
+            prev_image = frame;
+            prev_descriptors = curr_descriptors;
+            prev_keypoints = curr_keypoints;
+            gt_prev = current_gt;
 
-            BAFrame new_frame;
-            new_frame.frame_id = frame_id;
-            new_frame.R = R.clone();
-            new_frame.t = t.clone() * scale;  // metric-scaled
-            new_frame.is_stationary = stationary;
-            cv::Mat snap;
-            integrator->getSnapshot(frame_id, snap);
-            new_frame.T_world = snap;
+            if (lba_ && !R.empty() && !t.empty()) {
+                // Snapshot the integrator's world pose AFTER integrate() so the
+                // snapshot reflects this frame's pose in the world. The LBA
+                // correction is later computed as a world-frame delta against
+                // this exact snapshot.
+                const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
+                integrator->snapshotPose(frame_id);
 
-            std::vector<cv::Point2f> curr_pts;
-            cv::KeyPoint::convert(curr_keypoints, curr_pts);
-            new_frame.points2D = curr_pts;
-            new_frame.matched_prev_idx = matched_prev_idx;
+                BAFrame new_frame;
+                new_frame.frame_id = frame_id;
+                new_frame.R = R.clone();
+                new_frame.t = t.clone() * scale;  // metric-scaled
+                new_frame.is_stationary = false;
+                cv::Mat snap;
+                integrator->getSnapshot(frame_id, snap);
+                new_frame.T_world = snap;
 
-            lba_->pushFrame(new_frame);
-        }
+                std::vector<cv::Point2f> curr_pts;
+                cv::KeyPoint::convert(curr_keypoints, curr_pts);
+                new_frame.points2D = curr_pts;
+                new_frame.matched_prev_idx = matched_prev_idx;
 
-        if (lba_) {
-            BACorrection corr;
-            if (lba_->getCorrection(corr)) {
-                integrator->applyCorrection(corr.frame_id, corr.T_world_optimized);
+                lba_->pushFrame(new_frame);
             }
-        }
 
-        current_frame_id_++;
+            if (lba_) {
+                BACorrection corr;
+                if (lba_->getCorrection(corr)) {
+                    integrator->applyCorrection(corr.frame_id, corr.T_world_optimized);
+                }
+            }
+
+            current_frame_id_++;
+        }
+        // Stationary branch: deliberately do nothing. Anchors (prev_image,
+        // prev_keypoints, prev_descriptors) and gt_prev stay pinned to the
+        // last frame that produced real motion, so the next non-stationary
+        // call will see (a) descriptors against the same older anchor and
+        // (b) the full multi-frame GT delta as scale. This eliminates the
+        // "smaller scale, correct shape" drift where stationary-flagged
+        // frames silently consumed GT distance that VO never integrated.
     }
 
-    gt_prev = current_gt;
+    
 
     // Wall-clock totals and rolling FPS.
     auto t_end_total = std::chrono::high_resolution_clock::now();

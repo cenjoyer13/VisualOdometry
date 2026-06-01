@@ -13,7 +13,12 @@ SuperPointDetector::SuperPointDetector(const OdometryConfig& cfg)
 void SuperPointDetector::initializeSession() {
     Ort::SessionOptions session_options;
     session_options.SetIntraOpNumThreads(config.num_threads);
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+    // ORT_ENABLE_ALL fuses nodes around the SuperPoint NMS ScatterND in a way
+    // that corrupts shape inference on the CPU EP after the first inference
+    // (subsequent Run() calls throw on node_ScatterND_111 with
+    // updates/indices shape mismatches). DISABLE_ALL costs ~5-10% perf but
+    // is correct.
+    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
     session_options.SetLogSeverityLevel(3);
 
     // Hardware cascade: CUDA -> CPU. ONNX Runtime has no native OpenCL EP,
@@ -47,10 +52,13 @@ void SuperPointDetector::initializeSession() {
     }
 
     try {
-        // Model path is resolved against the process CWD; the binary expects
-        // a "models/" directory next to it (build/models/superpoint.onnx).
-        std::string model_path = "models/superpoint.onnx";
-        session = std::make_unique<Ort::Session>(*env, model_path.c_str(), session_options);
+        // ONNX Runtime on Windows expects wchar_t paths; POSIX takes narrow char.
+        #ifdef _WIN32
+            const wchar_t* model_path = L"models/superpoint.onnx";
+        #else
+            const char* model_path = "models/superpoint.onnx";
+        #endif
+        session = std::make_unique<Ort::Session>(*env, model_path, session_options);
     } catch (const Ort::Exception& e) {
         std::cerr << "[SuperPoint] CRITICAL ERROR: Could not load models/superpoint.onnx" << std::endl;
         throw;

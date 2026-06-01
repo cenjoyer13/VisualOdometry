@@ -1,7 +1,9 @@
+#define _USE_MATH_DEFINES  // Must be before any header that transitively pulls <cmath>.
 #include "LightGlueMatcher.h"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <string>
 
 LightGlueMatcher::LightGlueMatcher(const OdometryConfig& cfg)
     : config(cfg),
@@ -69,7 +71,12 @@ void LightGlueMatcher::initializeSession(int desc_dim) {
     }
 
     try {
-        session = std::make_unique<Ort::Session>(*env, model_path.c_str(), session_options);
+        #ifdef _WIN32
+            std::wstring wpath(model_path.begin(), model_path.end());
+            session = std::make_unique<Ort::Session>(*env, wpath.c_str(), session_options);
+        #else
+            session = std::make_unique<Ort::Session>(*env, model_path.c_str(), session_options);
+        #endif
         std::cout << "[LightGlue] ONNX Session booted successfully." << std::endl;
     } catch (const Ort::Exception& e) {
         std::cerr << "[LightGlue] CRITICAL ONNX ERROR: " << e.what() << std::endl;

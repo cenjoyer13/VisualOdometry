@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES  // Must be before any header that transitively pulls <cmath>.
 #include "LocalBundleAdjustment.h"
 #include <iostream>
 #include <cmath>

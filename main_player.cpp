@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
             MultirotorState state = client.getMultirotorState();
             const auto& q = state.kinematics_estimated.pose.orientation;
             const auto& p = state.kinematics_estimated.pose.position;
-            const auto& v = state.kinematics_estimated.linear_velocity;
+            const auto& v = state.kinematics_estimated.twist.linear;
 
             float gt_pitch, gt_roll, gt_yaw;
             quatToEuler(q.w(), q.x(), q.y(), q.z(), gt_pitch, gt_roll, gt_yaw);

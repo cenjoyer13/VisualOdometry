@@ -10,6 +10,7 @@ CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
 _deps/
+deps/
 
 # Compiled artifacts
 *.o
@@ -49,8 +50,3 @@ pred_tum.txt
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# --- Project-local notes ---------------------------------------------------
-OdometryProject.txt
-CLAUDE.md
-SKILL.md
