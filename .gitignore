@@ -11,6 +11,7 @@ cmake_install.cmake
 CTestTestfile.cmake
 _deps/
 deps/
+__pycache__/
 
 # Compiled artifacts
 *.o
