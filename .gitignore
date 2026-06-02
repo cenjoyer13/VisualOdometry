@@ -53,4 +53,5 @@ desktop.ini
 # --- Project-local notes ---------------------------------------------------
 OdometryProject.txt
 CLAUDE.md
+*.CLAUDE.md
 SKILL.md

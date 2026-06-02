@@ -35,6 +35,10 @@ private:
     std::unique_ptr<LocalBundleAdjustment> lba_;
     int current_frame_id_ = 0;
 
+    // Keyframing: frames matched against the current keyframe without yet
+    // producing a new one. Caps how long the anchor is held (see processFrame).
+    int frames_since_keyframe_ = 0;
+
 public:
     ~OdometryPipeline();
 

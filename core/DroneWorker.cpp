@@ -1,6 +1,7 @@
 #include "DroneWorker.h"
 #include "../odometry/OdometryPipeline.h"
 #include "../odometry/OdometryTypes.h"
+#include "../odometry/utils/PoseMath.h"
 #include "vehicles/multirotor/api/MultirotorRpcLibClient.hpp"
 
 #include <chrono>
@@ -10,22 +11,6 @@
 #include <iostream>
 
 using namespace msr::airlib;
-
-static void quatToEuler(float qw, float qx, float qy, float qz,
-                        float& pitch, float& roll, float& yaw) {
-    float sinr_cosp = 2.0f * (qw * qx + qy * qz);
-    float cosr_cosp = 1.0f - 2.0f * (qx * qx + qy * qy);
-    roll = std::atan2(sinr_cosp, cosr_cosp);
-
-    float sinp = 2.0f * (qw * qy - qz * qx);
-    pitch = (std::abs(sinp) >= 1.0f)
-                ? std::copysign(static_cast<float>(CV_PI) / 2.0f, sinp)
-                : std::asin(sinp);
-
-    float siny_cosp = 2.0f * (qw * qz + qx * qy);
-    float cosy_cosp = 1.0f - 2.0f * (qy * qy + qz * qz);
-    yaw = std::atan2(siny_cosp, cosy_cosp);
-}
 
 void runDroneLogic(SharedContext* ctx) {
     try {
@@ -76,7 +61,7 @@ void runDroneLogic(SharedContext* ctx) {
                     auto q = state.kinematics_estimated.pose.orientation;
                     auto pos = state.kinematics_estimated.pose.position;
 
-                    quatToEuler(q.w(), q.x(), q.y(), q.z(), gt_pitch, gt_roll, gt_yaw);
+                    PoseMath::quatToEuler(q.w(), q.x(), q.y(), q.z(), gt_pitch, gt_roll, gt_yaw);
 
                     GroundTruthData current_gt;
                     current_gt.orientation = cv::Vec3f(gt_pitch, gt_roll, gt_yaw);

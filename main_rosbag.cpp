@@ -22,54 +22,25 @@
 
 #include "odometry/OdometryPipeline.h"
 #include "odometry/OdometryTypes.h"
+#include "odometry/camera/CameraModelFactory.h"
+#include "odometry/camera/ICameraModel.h"
 #include "odometry/utils/ConfigLoader.h"
 #include "odometry/utils/CudaPreload.h"
+#include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
-// Rotation matrix to quaternion. Branch on the largest diagonal element to
-// keep the divisor well away from zero.
-static void rot2quat(const cv::Mat& R, float& qx, float& qy, float& qz, float& qw) {
-    double tr = R.at<double>(0,0) + R.at<double>(1,1) + R.at<double>(2,2);
-    if (tr > 0) {
-        double S = sqrt(tr+1.0) * 2;
-        qw = 0.25 * S;
-        qx = (R.at<double>(2,1) - R.at<double>(1,2)) / S;
-        qy = (R.at<double>(0,2) - R.at<double>(2,0)) / S;
-        qz = (R.at<double>(1,0) - R.at<double>(0,1)) / S;
-    } else if ((R.at<double>(0,0) > R.at<double>(1,1)) && (R.at<double>(0,0) > R.at<double>(2,2))) {
-        double S = sqrt(1.0 + R.at<double>(0,0) - R.at<double>(1,1) - R.at<double>(2,2)) * 2;
-        qw = (R.at<double>(2,1) - R.at<double>(1,2)) / S;
-        qx = 0.25 * S;
-        qy = (R.at<double>(0,1) + R.at<double>(1,0)) / S;
-        qz = (R.at<double>(0,2) + R.at<double>(2,0)) / S;
-    } else if (R.at<double>(1,1) > R.at<double>(2,2)) {
-        double S = sqrt(1.0 + R.at<double>(1,1) - R.at<double>(0,0) - R.at<double>(2,2)) * 2;
-        qw = (R.at<double>(0,2) - R.at<double>(2,0)) / S;
-        qx = (R.at<double>(0,1) + R.at<double>(1,0)) / S;
-        qy = 0.25 * S;
-        qz = (R.at<double>(1,2) + R.at<double>(2,1)) / S;
-    } else {
-        double S = sqrt(1.0 + R.at<double>(2,2) - R.at<double>(0,0) - R.at<double>(1,1)) * 2;
-        qw = (R.at<double>(1,0) - R.at<double>(0,1)) / S;
-        qx = (R.at<double>(0,2) + R.at<double>(2,0)) / S;
-        qy = (R.at<double>(1,2) + R.at<double>(2,1)) / S;
-        qz = 0.25 * S;
-    }
-}
-
-// Pitch/roll/yaw from a rotation matrix (KITTI convention).
-static void extractEulerFromRotation(const cv::Mat& R, float& pitch, float& roll, float& yaw) {
-    float sy = std::sqrt(R.at<double>(0,0) * R.at<double>(0,0) + R.at<double>(1,0) * R.at<double>(1,0));
-    bool singular = sy < 1e-6;
-    if (!singular) {
-        pitch = std::asin(-R.at<double>(2,0));
-        roll  = std::atan2(R.at<double>(2,1), R.at<double>(2,2));
-        yaw   = std::atan2(R.at<double>(1,0), R.at<double>(0,0));
-    } else {
-        pitch = std::asin(-R.at<double>(2,0));
-        roll  = 0;
-        yaw   = std::atan2(-R.at<double>(0,1), R.at<double>(1,1));
-    }
+// NED roll/pitch/yaw (degrees) to 3x3 rotation matrix (double). Standard
+// aerospace body-to-NED sequence R = Rz(yaw) * Ry(pitch) * Rx(roll); this is
+// the exact inverse of extractEulerFromRotation, so the round-trip is lossless.
+static cv::Mat eulerToRot(double roll_deg, double pitch_deg, double yaw_deg) {
+    const double deg = M_PI / 180.0;
+    double cr = std::cos(roll_deg * deg),  sr = std::sin(roll_deg * deg);
+    double cp = std::cos(pitch_deg * deg), sp = std::sin(pitch_deg * deg);
+    double cy = std::cos(yaw_deg * deg),   sy = std::sin(yaw_deg * deg);
+    return (cv::Mat_<double>(3,3) <<
+        cy*cp, cy*sp*sr - sy*cr, cy*sp*cr + sy*sr,
+        sy*cp, sy*sp*sr + cy*cr, sy*sp*cr - cy*sr,
+          -sp,            cp*sr,            cp*cr);
 }
 
 // Right-hand quaternion (x,y,z,w) to 3x3 rotation matrix (double).
@@ -84,11 +55,15 @@ static cv::Mat quatToRot(double qx, double qy, double qz, double qw) {
 
 struct PpkSample {
     int64_t ts_ns;
-    double lat, lon, alt;
+    double lat, lon, alt;        // WGS84 ellipsoidal (deg, deg, m)
+    double roll, pitch, yaw;     // NED frame (deg)
 };
 
-// Parse RTKLib .pos lines. Format is space-separated:
-//   YYYY/MM/DD HH:MM:SS.sss latitude longitude height Q ns sdn sde sdu ...
+// Parse RTKLib / FRL .pos lines. Both position and attitude ground truth come
+// from this file. Columns are space-separated:
+//   GPST(date time) lat lon height Q ns sdn sde sdu sdne sdeu sdun age ratio
+//   roll pitch yaw(deg) P Q R Ve Vn Vu
+// lat/lon/height are WGS84 ellipsoidal; roll/pitch/yaw are NED-frame degrees.
 // GPS time is converted to UTC by subtracting 18 leap seconds (valid 2017+).
 static std::vector<PpkSample> loadPpkFile(const std::string& path) {
     std::vector<PpkSample> out;
@@ -102,12 +77,15 @@ static std::vector<PpkSample> loadPpkFile(const std::string& path) {
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '%') continue;
 
-        int year, month, day, hour, minute;
+        int year, month, day, hour, minute, Q, ns;
         double sec, lat, lon, alt;
+        double sdn, sde, sdu, sdne, sdeu, sdun, age, ratio, roll, pitch, yaw;
         int n = std::sscanf(line.c_str(),
-            "%d/%d/%d %d:%d:%lf %lf %lf %lf",
-            &year, &month, &day, &hour, &minute, &sec, &lat, &lon, &alt);
-        if (n != 9) continue;
+            "%d/%d/%d %d:%d:%lf %lf %lf %lf %d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
+            &year, &month, &day, &hour, &minute, &sec, &lat, &lon, &alt,
+            &Q, &ns, &sdn, &sde, &sdu, &sdne, &sdeu, &sdun, &age, &ratio,
+            &roll, &pitch, &yaw);
+        if (n != 22) continue;
 
         std::tm tmv{};
         tmv.tm_year = year - 1900;
@@ -124,6 +102,7 @@ static std::vector<PpkSample> loadPpkFile(const std::string& path) {
                 + (int64_t)(frac * 1e9)
                 - 18LL * 1'000'000'000LL;  // GPST -> UTC
         s.lat = lat; s.lon = lon; s.alt = alt;
+        s.roll = roll; s.pitch = pitch; s.yaw = yaw;
         out.push_back(s);
     }
 
@@ -133,16 +112,29 @@ static std::vector<PpkSample> loadPpkFile(const std::string& path) {
     return out;
 }
 
-// Linear interpolation; clamps to endpoints outside the sample window.
+// Shortest-path interpolation between two angles given in degrees.
+static double lerpAngleDeg(double a, double b, double f) {
+    double d = std::fmod(b - a + 540.0, 360.0) - 180.0;
+    return a + f * d;
+}
+
+// Linear interpolation of position and attitude; clamps to endpoints outside
+// the sample window. Angles use shortest-path interpolation to stay correct
+// across the +-180 deg wrap.
 static bool interpolatePpk(const std::vector<PpkSample>& ppk, int64_t ts_ns,
-                           double& lat, double& lon, double& alt) {
+                           double& lat, double& lon, double& alt,
+                           double& roll, double& pitch, double& yaw) {
     if (ppk.empty()) return false;
     if (ts_ns <= ppk.front().ts_ns) {
-        lat = ppk.front().lat; lon = ppk.front().lon; alt = ppk.front().alt;
+        const PpkSample& s = ppk.front();
+        lat = s.lat; lon = s.lon; alt = s.alt;
+        roll = s.roll; pitch = s.pitch; yaw = s.yaw;
         return true;
     }
     if (ts_ns >= ppk.back().ts_ns) {
-        lat = ppk.back().lat; lon = ppk.back().lon; alt = ppk.back().alt;
+        const PpkSample& s = ppk.back();
+        lat = s.lat; lon = s.lon; alt = s.alt;
+        roll = s.roll; pitch = s.pitch; yaw = s.yaw;
         return true;
     }
     auto it = std::lower_bound(ppk.begin(), ppk.end(), ts_ns,
@@ -153,6 +145,9 @@ static bool interpolatePpk(const std::vector<PpkSample>& ppk, int64_t ts_ns,
     lat = lo.lat + a * (hi.lat - lo.lat);
     lon = lo.lon + a * (hi.lon - lo.lon);
     alt = lo.alt + a * (hi.alt - lo.alt);
+    roll  = lerpAngleDeg(lo.roll,  hi.roll,  a);
+    pitch = lerpAngleDeg(lo.pitch, hi.pitch, a);
+    yaw   = lerpAngleDeg(lo.yaw,   hi.yaw,   a);
     return true;
 }
 
@@ -238,14 +233,18 @@ int main(int argc, char** argv) {
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
 
     std::string yaml_file;
+    std::string out_path = "rosbag_trajectory.csv";
     bool cli_debug = false;
+    bool no_gui = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--debug") cli_debug = true;
+        else if (arg == "--no-gui") no_gui = true;
+        else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
         else if (yaml_file.empty()) yaml_file = arg;
     }
     if (yaml_file.empty()) {
-        std::cerr << "Usage: ./RosbagEvaluator <yaml_config_path> [--debug]\n";
+        std::cerr << "Usage: ./RosbagEvaluator <yaml_config_path> [--debug] [--no-gui] [--out <csv>]\n";
         return -1;
     }
 
@@ -265,6 +264,50 @@ int main(int argc, char** argv) {
     if (!loader.loadRosbagConfig(bag_cfg)) {
         std::cerr << "YAML is missing the rosbag block (rosbag.bag_path).\n";
         return -1;
+    }
+
+    // Camera model (optional). When camera.model_type is present the model owns
+    // undistortion and supplies the rectified pinhole intrinsics the pipeline
+    // runs on; otherwise the plain fx/fy/cx/cy from loadOdometryConfig stand.
+    std::unique_ptr<ICameraModel> camera;
+    CameraModelConfig cam_cfg;
+    if (loader.loadCameraModel(cam_cfg)) {
+        camera = CameraModelFactory::create(cam_cfg);
+        if (camera) {
+            config.intrinsics = camera->intrinsics();
+            const cv::Size sz = camera->outputSize();
+            std::cout << "[Camera] " << cam_cfg.model_type << " -> rectified "
+                      << sz.width << "x" << sz.height
+                      << " (fx=" << config.intrinsics.fx
+                      << " fy=" << config.intrinsics.fy
+                      << " cx=" << config.intrinsics.cx
+                      << " cy=" << config.intrinsics.cy << ")\n";
+        }
+    }
+
+    // cam0->body extrinsic. The logged VO pose (a camera pose in the VO world)
+    // is re-expressed at the body via T_world_body = T_world_cam0 * cam0_T_body,
+    // where cam0_T_body = (body_T_cam0)^-1. Identity when no extrinsic is given.
+    cv::Mat cam0_T_body = cv::Mat::eye(4, 4, CV_64F);
+    if (!bag_cfg.body_T_cam0.empty()) {
+        cv::Mat ext;
+        bag_cfg.body_T_cam0.convertTo(ext, CV_64F);
+        cam0_T_body = ext.inv();
+        std::cout << "[Extrinsic] Applying body_T_cam0 to logged poses.\n";
+    }
+
+    // Per-axis sign flip S = diag(sx,sy,sz,1) for a VO-vs-ENU handedness
+    // mismatch. Applied to the logged pose by conjugation S*T*S, which negates
+    // the chosen position axes while keeping the rotation a valid (det +1)
+    // matrix. Identity when no trajectory_flip block is given.
+    cv::Mat traj_flip = cv::Mat::eye(4, 4, CV_64F);
+    traj_flip.at<double>(0, 0) = bag_cfg.traj_sign[0];
+    traj_flip.at<double>(1, 1) = bag_cfg.traj_sign[1];
+    traj_flip.at<double>(2, 2) = bag_cfg.traj_sign[2];
+    if (bag_cfg.traj_sign != cv::Vec3d(1.0, 1.0, 1.0)) {
+        std::cout << "[Trajectory] Axis sign flip: ("
+                  << bag_cfg.traj_sign[0] << ", " << bag_cfg.traj_sign[1]
+                  << ", " << bag_cfg.traj_sign[2] << ")\n";
     }
 
     if (config.backend == ComputeBackend::CUDA) {
@@ -297,7 +340,7 @@ int main(int argc, char** argv) {
 
     auto pipeline = OdometryPipeline::build(config);
 
-    std::ofstream log_file("rosbag_trajectory.csv");
+    std::ofstream log_file(out_path);
     log_file << "Frame,Pred_X,Pred_Y,Pred_Z,Q_X,Q_Y,Q_Z,Q_W\n";
 
     std::cout << "[EVALUATOR] Starting rosbag replay: " << bag_cfg.bag_path << "\n";
@@ -306,7 +349,8 @@ int main(int argc, char** argv) {
               << "  imu_topic=" << bag_cfg.imu_topic << "\n";
     std::cout << "------------------------------------------------------\n";
 
-    RealTime2DTrajectory trajectory_visualizer(0.5f);
+    RealTime2DTrajectory trajectory_visualizer((float)bag_cfg.viz_scale,
+                                               RealTime2DTrajectory::Plane::XY);
 
     // Open bag and request the three topics we care about.
     rosbag::Bag bag;
@@ -322,6 +366,14 @@ int main(int argc, char** argv) {
     double cur_alt = 0.0;
     cv::Vec3f cur_position(0, 0, 0);
     cv::Mat   cur_R = cv::Mat::eye(3, 3, CV_64F);
+
+    // XY-plane auto-aligner: once GT has travelled aligner_init_distance from
+    // the first tracked frame, solve the yaw between the VO and GT displacement
+    // vectors and rotate the VO trajectory about Z by it. Identity until then.
+    cv::Mat align_T_vo = cv::Mat::eye(4, 4, CV_64F);
+    bool align_ready = false;
+    bool align_start_set = false;
+    cv::Point2d vo_start, gt_start;
 
     // Bag-relative time bounds (ns).
     uint64_t bag_start_ns = 0;
@@ -346,6 +398,7 @@ int main(int argc, char** argv) {
         if (rel_ns < skip_ns) continue;
 
         if (topic == bag_cfg.imu_topic) {
+            if (use_ppk) continue;  // attitude GT comes from the FRL file instead
             auto imu = m.instantiate<sensor_msgs::Imu>();
             if (!imu) continue;
             cur_R = quatToRot(imu->orientation.x, imu->orientation.y,
@@ -374,16 +427,19 @@ int main(int argc, char** argv) {
 
         if (topic != bag_cfg.img_topic) continue;
 
-        // PPK path: derive lat/lon/alt at the image timestamp.
+        // PPK / FRL path: derive both position and attitude at the image
+        // timestamp. lat/lon/alt feed the ENU position, roll/pitch/yaw (NED)
+        // feed the GT rotation, so R and t come entirely from the FRL file.
         if (use_ppk) {
-            double lat, lon, alt;
-            if (!interpolatePpk(ppk, (int64_t)ts_ns, lat, lon, alt)) continue;
+            double lat, lon, alt, roll, pitch, yaw;
+            if (!interpolatePpk(ppk, (int64_t)ts_ns, lat, lon, alt, roll, pitch, yaw)) continue;
             if (!have_origin) {
                 origin_lat = lat; origin_lon = lon; origin_alt = alt;
                 have_origin = true;
             }
             cur_alt = alt;
             cur_position = enuOffset(origin_lat, origin_lon, origin_alt, lat, lon, alt);
+            cur_R = eulerToRot(roll, pitch, yaw);
         }
 
         // Hold images until the first GPS / PPK packet pins the local origin.
@@ -391,32 +447,72 @@ int main(int argc, char** argv) {
 
         cv::Mat frame = decodeImage(m.instantiate<sensor_msgs::Image>());
         if (frame.empty()) continue;
+        if (camera) frame = camera->undistortImage(frame);
 
         GroundTruthData current_gt;
         current_gt.position = cur_position;
         float pitch, roll, yaw;
-        extractEulerFromRotation(cur_R, pitch, roll, yaw);
+        PoseMath::extractEulerFromRotation(cur_R, pitch, roll, yaw);
         current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
 
         DeviceBuffer frame_buffer(frame);
         pipeline->processFrame(frame_buffer, current_gt);
 
         if (pipeline->isTrackingActive()) {
-            cv::Mat T_VO = pipeline->getGlobalTransformVO();
-            float pred_x = T_VO.at<double>(0, 3);
-            float pred_y = T_VO.at<double>(1, 3);
-            float pred_z = T_VO.at<double>(2, 3);
+            // Body-referenced VO pose in the display frame: extrinsic + the
+            // handedness sign flip applied (conjugation by traj_flip keeps the
+            // rotation valid), but not yet the yaw alignment.
+            cv::Mat M = traj_flip * pipeline->getGlobalTransformVO()
+                        * cam0_T_body * traj_flip;
 
-            cv::Mat R_pred = T_VO(cv::Rect(0, 0, 3, 3));
+            // Auto-aligner: record the VO and GT start once tracking begins, and
+            // once GT has travelled aligner_init_distance, solve the yaw that
+            // rotates the VO displacement onto the GT displacement. Held after.
+            if (!align_ready) {
+                cv::Point2d p_vo(M.at<double>(0, 3), M.at<double>(1, 3));
+                cv::Point2d p_gt(current_gt.position[0], current_gt.position[1]);
+                if (!align_start_set) {
+                    vo_start = p_vo;
+                    gt_start = p_gt;
+                    align_start_set = true;
+                }
+                cv::Point2d gt_disp = p_gt - gt_start;
+                if (cv::norm(gt_disp) >= bag_cfg.aligner_init_distance) {
+                    cv::Point2d vo_disp = p_vo - vo_start;
+                    if (cv::norm(vo_disp) > 1e-6) {
+                        const double yaw = std::atan2(gt_disp.y, gt_disp.x)
+                                         - std::atan2(vo_disp.y, vo_disp.x);
+                        const double c = std::cos(yaw), s = std::sin(yaw);
+                        align_T_vo = (cv::Mat_<double>(4, 4) <<
+                            c, -s, 0, 0,
+                            s,  c, 0, 0,
+                            0,  0, 1, 0,
+                            0,  0, 0, 1);
+                        align_ready = true;
+                        std::cout << "\n[Aligner] yaw=" << yaw * 180.0 / M_PI
+                                  << " deg after " << cv::norm(gt_disp) << " m of GT travel\n";
+                    }
+                }
+            }
+
+            // Apply the yaw alignment outermost in the display frame.
+            cv::Mat T_world = align_T_vo * M;
+            float pred_x = T_world.at<double>(0, 3);
+            float pred_y = T_world.at<double>(1, 3);
+            float pred_z = T_world.at<double>(2, 3);
+
+            cv::Mat R_pred = T_world(cv::Rect(0, 0, 3, 3));
             float qx, qy, qz, qw;
-            rot2quat(R_pred, qx, qy, qz, qw);
+            PoseMath::rot2quat(R_pred, qx, qy, qz, qw);
 
             log_file << frame_id << "," << pred_x << "," << pred_y << "," << pred_z << ","
                      << qx << "," << qy << "," << qz << "," << qw << "\n";
 
-            cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
-            cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
-            cv::imshow("Rosbag 2D Trajectory", traj_img);
+            if (!no_gui) {
+                cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
+                cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
+                cv::imshow("Rosbag 2D Trajectory", traj_img);
+            }
         }
 
         const double agl = cur_alt - baseline_agl;
@@ -427,10 +523,12 @@ int main(int argc, char** argv) {
                mtr.time_total_ms, mtr.fps);
         fflush(stdout);
 
-        cv::Mat vis = pipeline->getDebugFrame();
-        if (!vis.empty()) {
-            cv::imshow("Rosbag VO Feature Tracking", vis);
-            if (cv::waitKey(1) == 27) break;
+        if (!no_gui) {
+            cv::Mat vis = pipeline->getDebugFrame();
+            if (!vis.empty()) {
+                cv::imshow("Rosbag VO Feature Tracking", vis);
+                if (cv::waitKey(1) == 27) break;
+            }
         }
 
         frame_id++;
@@ -439,6 +537,6 @@ int main(int argc, char** argv) {
     bag.close();
     printf("\n");
     log_file.close();
-    std::cout << "[EVALUATOR] Complete. Trajectory saved to rosbag_trajectory.csv\n";
+    std::cout << "[EVALUATOR] Complete. Trajectory saved to " << out_path << "\n";
     return 0;
 }

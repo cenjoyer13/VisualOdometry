@@ -10,10 +10,7 @@
 #include "odometry/OdometryTypes.h"
 #include "odometry/utils/ConfigLoader.h"
 #include "odometry/utils/CudaPreload.h"
-
-static bool isKeyPressed(int key) {
-    return (GetAsyncKeyState(key) & 0x8000) != 0;
-}
+#include "odometry/utils/InputUtils.h"
 
 int main(int argc, char** argv) {
     if (argc < 2) {

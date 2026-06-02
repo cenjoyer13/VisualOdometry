@@ -19,6 +19,8 @@
 #include "odometry/OdometryTypes.h"
 #include "odometry/utils/ConfigLoader.h"
 #include "odometry/utils/CudaPreload.h"
+#include "odometry/utils/InputUtils.h"
+#include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
 using namespace msr::airlib;
@@ -28,23 +30,6 @@ struct Waypoint {
     float x, y, z;       // NED
     float qw, qx, qy, qz;
 };
-
-static bool isKeyPressed(int key) {
-    return (GetAsyncKeyState(key) & 0x8000) != 0;
-}
-
-static void quatToEuler(float qw, float qx, float qy, float qz,
-                        float& pitch, float& roll, float& yaw) {
-    float sinr_cosp = 2.0f * (qw * qx + qy * qz);
-    float cosr_cosp = 1.0f - 2.0f * (qx * qx + qy * qy);
-    roll = std::atan2(sinr_cosp, cosr_cosp);
-    float sinp = 2.0f * (qw * qy - qz * qx);
-    pitch = (std::abs(sinp) >= 1.0f) ? std::copysign(static_cast<float>(CV_PI) / 2.0f, sinp)
-                                     : std::asin(sinp);
-    float siny_cosp = 2.0f * (qw * qz + qx * qy);
-    float cosy_cosp = 1.0f - 2.0f * (qy * qy + qz * qz);
-    yaw = std::atan2(siny_cosp, cosy_cosp);
-}
 
 static bool loadTrajectory(const std::string& path, std::vector<Waypoint>& out) {
     std::ifstream in(path);
@@ -208,7 +193,7 @@ int main(int argc, char** argv) {
             const auto& v = state.kinematics_estimated.linear_velocity;
 
             float gt_pitch, gt_roll, gt_yaw;
-            quatToEuler(q.w(), q.x(), q.y(), q.z(), gt_pitch, gt_roll, gt_yaw);
+            PoseMath::quatToEuler(q.w(), q.x(), q.y(), q.z(), gt_pitch, gt_roll, gt_yaw);
 
             // Pipeline frame: X=East(right), Y=North(forward), Z=Up
             GroundTruthData current_gt;

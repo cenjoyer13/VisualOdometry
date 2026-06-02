@@ -146,55 +146,84 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
     metrics.time_pose_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     if (pose_success) {
-        double scale = scale_estimator->updateScale(gt_prev, current_gt);
-        integrator->integrate(R, t, scale);
-
-        // Stationary tag: pose estimator returns a zero translation when it
-        // detects insufficient disparity. LBA uses this to collapse the
-        // BetweenFactor to a tight identity instead of treating it as motion.
+        // The estimator returns a zero translation when it cannot recover
+        // motion (parallax below min_disparity, too few matches, or a
+        // degenerate decomposition).
         const double norm_t = cv::norm(t);
         const bool stationary = (norm_t <= 1e-6);
+        const int num_matches = static_cast<int>(good_matches.size());
 
-        // Advance the frontend anchor before pushing to LBA so the next
-        // match's indices line up with what was just pushed.
-        prev_image = frame;
-        prev_descriptors = curr_descriptors;
-        prev_keypoints = curr_keypoints;
-        gt_prev = current_gt;
+        // Keyframing decision:
+        //  - real keyframe: motion recovered (enough parallax) -> integrate.
+        //  - forced keyframe: parallax still too low, but holding the anchor
+        //    longer risks matching collapse, so cut a keyframe to keep tracking
+        //    alive (matches near the floor, or held for too many frames).
+        //  - otherwise hold the anchor: the next frame keeps matching against
+        //    this keyframe, so both parallax and the GT baseline that sets the
+        //    metric scale accumulate until a usable motion appears. This is the
+        //    fix for high-FPS scale loss: advancing on every sub-threshold
+        //    frame would integrate zero while moving gt_prev forward, dropping
+        //    the GT motion across the gap.
+        const bool forced = stationary &&
+            (num_matches < config.keyframe_min_matches ||
+             frames_since_keyframe_ >= config.keyframe_max_skip);
 
-        if (lba_ && !R.empty() && !t.empty()) {
-            // Snapshot the integrator's world pose AFTER integrate() so the
-            // snapshot reflects this frame's pose in the world. The LBA
-            // correction is later computed as a world-frame delta against
-            // this exact snapshot.
-            const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
-            integrator->snapshotPose(frame_id);
+        if (!stationary || forced) {
+            // Scale spans the whole keyframe-to-current baseline because gt_prev
+            // was held across the skipped frames. A forced (still-stationary)
+            // keyframe has t == 0, so it integrates nothing and its span is
+            // unrecoverable, but matching is preserved.
+            double scale = scale_estimator->updateScale(gt_prev, current_gt);
+            integrator->integrate(R, t, scale);
 
-            BAFrame new_frame;
-            new_frame.frame_id = frame_id;
-            new_frame.R = R.clone();
-            new_frame.t = t.clone() * scale;  // metric-scaled
-            new_frame.is_stationary = stationary;
-            cv::Mat snap;
-            integrator->getSnapshot(frame_id, snap);
-            new_frame.T_world = snap;
+            // Advance the frontend anchor (the new keyframe) before pushing to
+            // LBA so the next match's indices line up with what was just pushed.
+            prev_image = frame;
+            prev_descriptors = curr_descriptors;
+            prev_keypoints = curr_keypoints;
+            gt_prev = current_gt;
+            frames_since_keyframe_ = 0;
 
-            std::vector<cv::Point2f> curr_pts;
-            cv::KeyPoint::convert(curr_keypoints, curr_pts);
-            new_frame.points2D = curr_pts;
-            new_frame.matched_prev_idx = matched_prev_idx;
+            if (lba_ && !R.empty() && !t.empty()) {
+                // Snapshot the integrator's world pose AFTER integrate() so the
+                // snapshot reflects this frame's pose in the world. The LBA
+                // correction is later computed as a world-frame delta against
+                // this exact snapshot. Forced keyframes push with is_stationary
+                // so LBA holds them as a tight identity rather than fitting the
+                // unobserved motion, and the track chain stays contiguous.
+                const uint64_t frame_id = static_cast<uint64_t>(current_frame_id_);
+                integrator->snapshotPose(frame_id);
 
-            lba_->pushFrame(new_frame);
-        }
+                BAFrame new_frame;
+                new_frame.frame_id = frame_id;
+                new_frame.R = R.clone();
+                new_frame.t = t.clone() * scale;  // metric-scaled
+                new_frame.is_stationary = stationary;
+                cv::Mat snap;
+                integrator->getSnapshot(frame_id, snap);
+                new_frame.T_world = snap;
 
-        if (lba_) {
-            BACorrection corr;
-            if (lba_->getCorrection(corr)) {
-                integrator->applyCorrection(corr.frame_id, corr.T_world_optimized);
+                std::vector<cv::Point2f> curr_pts;
+                cv::KeyPoint::convert(curr_keypoints, curr_pts);
+                new_frame.points2D = curr_pts;
+                new_frame.matched_prev_idx = matched_prev_idx;
+
+                lba_->pushFrame(new_frame);
             }
-        }
 
-        current_frame_id_++;
+            if (lba_) {
+                BACorrection corr;
+                if (lba_->getCorrection(corr)) {
+                    integrator->applyCorrection(corr.frame_id, corr.T_world_optimized);
+                }
+            }
+
+            current_frame_id_++;
+        } else {
+            // Hold the keyframe; anchor and gt_prev unchanged so parallax and
+            // the scale baseline keep accumulating.
+            frames_since_keyframe_++;
+        }
     }
 
     // Wall-clock totals and rolling FPS.

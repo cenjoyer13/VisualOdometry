@@ -1,13 +1,14 @@
 #pragma once
 #include "CheiralityPoseEstimator.h"
 
-// Essential-matrix estimator: RANSAC findEssentialMat + decomposeEssentialMat
-// yields four (R, t) hypotheses, disambiguated by the base cheirality check.
-class CustomCheiralityPoseEstimator : public CheiralityPoseEstimator {
+// Homography estimator: RANSAC findHomography + decomposeHomographyMat yields
+// up to four (R, t) hypotheses, disambiguated by the base cheirality check.
+// Suited to planar / low-parallax scenes where the essential matrix degenerates.
+class HomographyCheiralityPoseEstimator : public CheiralityPoseEstimator {
 public:
-    explicit CustomCheiralityPoseEstimator(const OdometryConfig& cfg)
+    explicit HomographyCheiralityPoseEstimator(const OdometryConfig& cfg)
         : CheiralityPoseEstimator(cfg) {}
-    ~CustomCheiralityPoseEstimator() override = default;
+    ~HomographyCheiralityPoseEstimator() override = default;
 
 protected:
     void generateHypotheses(const std::vector<cv::Point2f>& pts_old,

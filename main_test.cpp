@@ -14,53 +14,8 @@
 #include "odometry/OdometryTypes.h"
 #include "odometry/utils/ConfigLoader.h"
 #include "odometry/utils/CudaPreload.h"
+#include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
-
-// Rotation matrix to quaternion. Branch on the largest diagonal element to
-// keep the divisor well away from zero.
-void rot2quat(const cv::Mat& R, float& qx, float& qy, float& qz, float& qw) {
-    double tr = R.at<double>(0,0) + R.at<double>(1,1) + R.at<double>(2,2);
-    if (tr > 0) {
-        double S = sqrt(tr+1.0) * 2;
-        qw = 0.25 * S;
-        qx = (R.at<double>(2,1) - R.at<double>(1,2)) / S;
-        qy = (R.at<double>(0,2) - R.at<double>(2,0)) / S;
-        qz = (R.at<double>(1,0) - R.at<double>(0,1)) / S;
-    } else if ((R.at<double>(0,0) > R.at<double>(1,1)) && (R.at<double>(0,0) > R.at<double>(2,2))) {
-        double S = sqrt(1.0 + R.at<double>(0,0) - R.at<double>(1,1) - R.at<double>(2,2)) * 2;
-        qw = (R.at<double>(2,1) - R.at<double>(1,2)) / S;
-        qx = 0.25 * S;
-        qy = (R.at<double>(0,1) + R.at<double>(1,0)) / S;
-        qz = (R.at<double>(0,2) + R.at<double>(2,0)) / S;
-    } else if (R.at<double>(1,1) > R.at<double>(2,2)) {
-        double S = sqrt(1.0 + R.at<double>(1,1) - R.at<double>(0,0) - R.at<double>(2,2)) * 2;
-        qw = (R.at<double>(0,2) - R.at<double>(2,0)) / S;
-        qx = (R.at<double>(0,1) + R.at<double>(1,0)) / S;
-        qy = 0.25 * S;
-        qz = (R.at<double>(1,2) + R.at<double>(2,1)) / S;
-    } else {
-        double S = sqrt(1.0 + R.at<double>(2,2) - R.at<double>(0,0) - R.at<double>(1,1)) * 2;
-        qw = (R.at<double>(1,0) - R.at<double>(0,1)) / S;
-        qx = (R.at<double>(0,2) + R.at<double>(2,0)) / S;
-        qy = (R.at<double>(1,2) + R.at<double>(2,1)) / S;
-        qz = 0.25 * S;
-    }
-}
-
-// Extract pitch/roll/yaw from a rotation matrix (KITTI convention).
-void extractEulerFromRotation(const cv::Mat& R, float& pitch, float& roll, float& yaw) {
-    float sy = std::sqrt(R.at<double>(0,0) * R.at<double>(0,0) + R.at<double>(1,0) * R.at<double>(1,0));
-    bool singular = sy < 1e-6;
-    if (!singular) {
-        pitch = std::asin(-R.at<double>(2,0));
-        roll  = std::atan2(R.at<double>(2,1), R.at<double>(2,2));
-        yaw   = std::atan2(R.at<double>(1,0), R.at<double>(0,0));
-    } else {
-        pitch = std::asin(-R.at<double>(2,0));
-        roll  = 0;
-        yaw   = std::atan2(-R.at<double>(0,1), R.at<double>(1,1));
-    }
-}
 
 bool parseKittiPose(const std::string& line, GroundTruthData& gt_data) {
     std::istringstream iss(line);
@@ -74,7 +29,7 @@ bool parseKittiPose(const std::string& line, GroundTruthData& gt_data) {
                  values[8], values[9], values[10]);
 
     float pitch, roll, yaw;
-    extractEulerFromRotation(R, pitch, roll, yaw);
+    PoseMath::extractEulerFromRotation(R, pitch, roll, yaw);
     gt_data.orientation = cv::Vec3f(pitch, roll, yaw);
     gt_data.position = cv::Vec3f(values[3], values[7], values[11]); 
     return true;
@@ -170,7 +125,7 @@ int main(int argc, char** argv) {
 
             cv::Mat R = T_VO(cv::Rect(0, 0, 3, 3));
             float qx, qy, qz, qw;
-            rot2quat(R, qx, qy, qz, qw);
+            PoseMath::rot2quat(R, qx, qy, qz, qw);
 
             log_file << frame_id << "," << pred_x << "," << pred_y << "," << pred_z << ","
                      << qx << "," << qy << "," << qz << "," << qw << "\n";

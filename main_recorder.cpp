@@ -13,6 +13,8 @@
 
 #include "vehicles/multirotor/api/MultirotorRpcLibClient.hpp"
 
+#include "odometry/utils/InputUtils.h"
+
 using namespace msr::airlib;
 
 struct UserInput {
@@ -27,10 +29,6 @@ struct RecorderContext {
     std::atomic<bool> has_new_frame{false};
     std::atomic<bool> is_running{true};
 };
-
-static bool isKeyPressed(int key) {
-    return (GetAsyncKeyState(key) & 0x8000) != 0;
-}
 
 static void recorderWorker(RecorderContext* ctx, const std::string& out_path, int sample_hz) {
     try {

@@ -2,6 +2,7 @@
 #include <opencv2/core.hpp>
 #include <string>
 #include "../OdometryTypes.h"
+#include "../camera/CameraModelConfig.h"
 
 // Per-bag inputs for RosbagEvaluator. All fields ship with sane defaults that
 // match the Python RosbagLoader; bag_path is the only mandatory key.
@@ -13,6 +14,10 @@ struct RosbagConfig {
     std::string ppk_path;                   // empty disables PPK overlay
     double start_time = 0.0;                // seconds from bag start
     double end_time   = -1.0;               // < 0 means unbounded
+    cv::Mat body_T_cam0;                     // 4x4 cam0->body extrinsic; empty = identity
+    cv::Vec3d traj_sign{1.0, 1.0, 1.0};      // per-axis sign flip for the logged trajectory
+    double viz_scale = 0.5;                   // 2D trajectory visualizer px-per-metre scale
+    double aligner_init_distance = 10.0;      // GT travel (m) before solving the VO->GT yaw
 };
 
 // Wraps an OpenCV FileStorage handle and converts a YAML config file into an
@@ -35,9 +40,14 @@ public:
     // PathPlayer helper: airsim.playback_velocity. Returns false if absent.
     bool loadPlaybackVelocity(float& out_velocity);
 
-    // RosbagEvaluator helper: rosbag.* block. Returns false if the block is
-    // absent or has no bag_path.
+    // RosbagEvaluator helper: rosbag.* block plus the top-level body_T_cam0
+    // extrinsic. Returns false if the rosbag block is absent or has no bag_path.
     bool loadRosbagConfig(RosbagConfig& out_config);
+
+    // Reads the camera.model_type block into a CameraModelConfig. Returns false
+    // when no model_type is present, signalling the caller to keep the plain
+    // fx/fy/cx/cy intrinsics from loadOdometryConfig and skip undistortion.
+    bool loadCameraModel(CameraModelConfig& out_config);
 
 private:
     cv::FileStorage fs;

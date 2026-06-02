@@ -119,6 +119,13 @@ struct OdometryConfig {
 
     std::string detector_type = "SIFT";
     std::string matcher_type = "FLANN";
+    std::string pose_estimator_type = "Essential";   // "Essential" | "Homography"
+
+    // Keyframing caps. The frontend anchor is held while parallax accumulates;
+    // a keyframe is forced (to keep matching alive) once matches drop below
+    // keyframe_min_matches or the anchor has been held keyframe_max_skip frames.
+    int keyframe_max_skip = 20;
+    int keyframe_min_matches = 30;
 
     int num_threads = 1;
     // Global debug toggle, set by YAML system.verbose or CLI --debug.

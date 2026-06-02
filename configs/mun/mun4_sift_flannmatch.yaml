@@ -1,15 +1,15 @@
 %YAML:1.0
 
 visualizer:
-    scale: 0.2      # px-per-metre zoom of the 2D trajectory window
+    scale: 0.1      # px-per-metre zoom of the 2D trajectory window
 
 rosbag:
-  bag_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3.bag
-  ppk_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3_frl.pos
+  bag_path: ../../../VO-datasets/MUN-FRL/Bell412-4/bell412_dataset4.bag
+  ppk_path: ../../../VO-datasets/MUN-FRL/Bell412-4/bell412_dataset4_frl.pos
   img_topic: /camera/image_mono
   gps_topic: /fix
   imu_topic: /imu/data
-  start_time: 30.0           
+  start_time: 20.0           
   end_time: 270.0                 
 
 
@@ -69,20 +69,20 @@ camera:
   scale_factor: 0.5
   image_width: 1440
   image_height: 1080
+  mu: 829.224
+  mv: 829.454
+  u0: 833.937
+  v0: 562.509
   k2: -0.0764245
-  k3:  0.0322856
+  k3: 0.0322856
   k4: -0.0445168
-  k5:  0.0163317
-  mu:  829.224
-  mv:  829.454
-  u0:  833.937
-  v0:  562.509
+  k5: 0.0163317
 
 pose_estimator:
   type: Homography
 
 system:
-  backend: CPU
+  backend: CUDA
   num_threads: 12
   verbose: 0
   

@@ -6,12 +6,22 @@ ConfigLoader::ConfigLoader(const std::string& yaml_path)
 bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
     if (!fs.isOpened()) return false;
 
-    // Detector / matcher selection
+    // Detector / matcher / pose-estimator selection
     if (!fs["detector"]["type"].empty()) {
         out.detector_type = (std::string)fs["detector"]["type"];
     }
     if (!fs["matcher"]["type"].empty()) {
         out.matcher_type = (std::string)fs["matcher"]["type"];
+    }
+    if (!fs["pose_estimator"]["type"].empty()) {
+        out.pose_estimator_type = (std::string)fs["pose_estimator"]["type"];
+    }
+
+    // Keyframing caps.
+    cv::FileNode kf = fs["keyframe"];
+    if (!kf.empty()) {
+        if (!kf["max_skip"].empty())    out.keyframe_max_skip    = (int)kf["max_skip"];
+        if (!kf["min_matches"].empty()) out.keyframe_min_matches = (int)kf["min_matches"];
     }
 
     // Detector params (per-type block under detector.<type>)
@@ -159,5 +169,47 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     if (!n["ppk_path"].empty())   out.ppk_path  = (std::string)n["ppk_path"];
     if (!n["start_time"].empty()) out.start_time = (double)n["start_time"];
     if (!n["end_time"].empty())   out.end_time   = (double)n["end_time"];
+
+    // cam0->body extrinsic (top-level opencv-matrix). Left empty when absent,
+    // which the evaluator treats as identity.
+    cv::FileNode ext = fs["body_T_cam0"];
+    if (!ext.empty()) ext >> out.body_T_cam0;
+
+    // Per-axis sign flip for the logged trajectory, to reconcile a VO-vs-ENU
+    // handedness mismatch (a reflection a rotation cannot fix). Defaults to no
+    // flip; each axis is read independently.
+    cv::FileNode flip = fs["trajectory_flip"];
+    if (!flip.empty()) {
+        if (!flip["x"].empty()) out.traj_sign[0] = (double)flip["x"];
+        if (!flip["y"].empty()) out.traj_sign[1] = (double)flip["y"];
+        if (!flip["z"].empty()) out.traj_sign[2] = (double)flip["z"];
+    }
+
+    cv::FileNode viz = fs["visualizer"];
+    if (!viz.empty() && !viz["scale"].empty()) out.viz_scale = (double)viz["scale"];
+
+    cv::FileNode al = fs["aligner"];
+    if (!al.empty() && !al["init_distance"].empty())
+        out.aligner_init_distance = (double)al["init_distance"];
+    return true;
+}
+
+bool ConfigLoader::loadCameraModel(CameraModelConfig& out) {
+    if (!fs.isOpened()) return false;
+    cv::FileNode cam = fs["camera"];
+    if (cam.empty() || cam["model_type"].empty()) return false;
+
+    out.model_type = (std::string)cam["model_type"];
+    if (!cam["scale_factor"].empty()) out.scale_factor = (double)cam["scale_factor"];
+    if (!cam["image_width"].empty())  out.image_width  = (int)cam["image_width"];
+    if (!cam["image_height"].empty()) out.image_height = (int)cam["image_height"];
+    out.mu = (double)cam["mu"];
+    out.mv = (double)cam["mv"];
+    out.u0 = (double)cam["u0"];
+    out.v0 = (double)cam["v0"];
+    if (!cam["k2"].empty()) out.k2 = (double)cam["k2"];
+    if (!cam["k3"].empty()) out.k3 = (double)cam["k3"];
+    if (!cam["k4"].empty()) out.k4 = (double)cam["k4"];
+    if (!cam["k5"].empty()) out.k5 = (double)cam["k5"];
     return true;
 }

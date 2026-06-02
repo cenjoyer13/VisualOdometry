@@ -9,18 +9,12 @@ rosbag:
   img_topic: /camera/image_mono
   gps_topic: /fix
   imu_topic: /imu/data
-  start_time: 30.0           
-  end_time: 270.0                 
+  start_time: 30.0
+  end_time: 300.0
 
 
 detector:
-  type: SIFT
-  SIFT:
-    nfeatures: 1000
-    nOctaveLayers: 3
-    contrastThreshold: 0.04
-    edgeThreshold: 10
-    sigma: 1.6
+  type: SuperPoint
 
 matcher:
   type: FLANN
@@ -28,13 +22,13 @@ matcher:
     kdTrees: 5
     searchChecks: 50
   distance_ratio: 0.75
-  
+
 bucketing:
   enabled: 1
   grid_cols: 8
   grid_rows: 6
   max_features_per_bucket: 30
- 
+
 local_bundle_adjustment:
   enabled: 1
   window_size: 10
@@ -69,23 +63,23 @@ camera:
   scale_factor: 0.5
   image_width: 1440
   image_height: 1080
+  mu: 829.224
+  mv: 829.454
+  u0: 833.937
+  v0: 562.509
   k2: -0.0764245
-  k3:  0.0322856
+  k3: 0.0322856
   k4: -0.0445168
-  k5:  0.0163317
-  mu:  829.224
-  mv:  829.454
-  u0:  833.937
-  v0:  562.509
+  k5: 0.0163317
 
 pose_estimator:
   type: Homography
 
 system:
-  backend: CPU
+  backend: CUDA
   num_threads: 12
   verbose: 0
-  
+
 trajectory_flip:
   x: -1
   z: -1
