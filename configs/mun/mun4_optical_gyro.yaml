@@ -1,43 +1,33 @@
 %YAML:1.0
 
 visualizer:
-    scale: 0.2      # px-per-metre zoom of the 2D trajectory window
+    scale: 0.1      # px-per-metre zoom of the 2D trajectory window
 
 rosbag:
-  bag_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3.bag
-  ppk_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3_frl.pos
+  bag_path: ../../../VO-datasets/MUN-FRL/Bell412-4/bell412_dataset4.bag
+  ppk_path: ../../../VO-datasets/MUN-FRL/Bell412-4/bell412_dataset4_frl.pos
   img_topic: /camera/image_mono
   gps_topic: /fix
   imu_topic: /imu/data
-  start_time: 30.0           
-  end_time: 300.0                 
+  start_time: 20.0
+  end_time: 300.0
+
+frontend: optical_flow
+optical_flow:
+  max_corners: 1000
+  win_size: 21 
+  fb_error_threshold: 1.0
 
 
-detector:
-  type: SIFT
-  SIFT:
-    nfeatures: 1000
-    nOctaveLayers: 3
-    contrastThreshold: 0.04
-    edgeThreshold: 10
-    sigma: 1.6
-
-matcher:
-  type: FLANN
-  FLANN:
-    kdTrees: 5
-    searchChecks: 50
-  distance_ratio: 0.75
-  
 bucketing:
   enabled: 1
   grid_cols: 8
   grid_rows: 6
   max_features_per_bucket: 30
- 
+
 local_bundle_adjustment:
   enabled: 1
-  window_size: 10
+  window_size: 15
   opt_stride: 2
   anchor_prior_sigma: 1e-4
   end_prior_rot_sigma: 0.03
@@ -46,12 +36,12 @@ local_bundle_adjustment:
   between_trans_sigma: 1.5
   stationary_rot_sigma: 0.03
   stationary_trans_sigma: 1.5
-  pixel_sigma: 1.5
+  pixel_sigma: 2.0
   rank_tolerance: 1.0e-5
   outlier_threshold: 4.0
-  min_observations: 4
-  min_bbox_diagonal: 25.0
-  min_smart_factors: 30
+  min_observations: 5
+  min_bbox_diagonal: 30.0
+  min_smart_factors: 50
   max_correction_translation: 5.0
   max_correction_rotation_deg: 5.0
 
@@ -80,13 +70,12 @@ camera:
 
 pose_estimator:
   type: Homography
-  altimeter_scale: 0
 
 system:
   backend: CPU
   num_threads: 12
   verbose: 0
-  
+
 trajectory_flip:
   x: -1
   z: -1
@@ -97,3 +86,14 @@ aligner:
 keyframe:
   min_matches: 12
   max_skip: 40
+  
+imu:
+  mode: gyro
+  topic: /imu/data
+  acc_n: 0.08
+  gyr_n: 0.004
+  acc_w: 0.00004
+  gyr_w: 0.0001
+  g_norm: 9.803
+  td: -0.0297405129318
+  gyro_rot_sigma: 0.002

@@ -16,6 +16,20 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
     if (!fs["pose_estimator"]["type"].empty()) {
         out.pose_estimator_type = (std::string)fs["pose_estimator"]["type"];
     }
+    if (!fs["frontend"].empty()) {
+        out.frontend_type = (std::string)fs["frontend"];
+    }
+    cv::FileNode of = fs["optical_flow"];
+    if (!of.empty()) {
+        OpticalFlowParams& p = out.optical_flow_params;
+        if (!of["max_corners"].empty())        p.max_corners = (int)of["max_corners"];
+        if (!of["quality_level"].empty())      p.quality_level = (double)of["quality_level"];
+        if (!of["min_distance"].empty())       p.min_distance = (double)of["min_distance"];
+        if (!of["win_size"].empty())           p.win_size = (int)of["win_size"];
+        if (!of["max_level"].empty())          p.max_level = (int)of["max_level"];
+        if (!of["fb_error_threshold"].empty()) p.fb_error_threshold = (double)of["fb_error_threshold"];
+        if (!of["min_tracks"].empty())         p.min_tracks = (int)of["min_tracks"];
+    }
 
     // Keyframing caps.
     cv::FileNode kf = fs["keyframe"];

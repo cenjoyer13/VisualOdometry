@@ -1,10 +1,5 @@
 # Optical-flow frontend plan (Shi-Tomasi + KLT via `IFrontend`)
 
-Status: **Design only. Sequenced AFTER the IMU work** (`IMU_PLAN.md`: Phase 0/1
-done, Phase 2 altimeter scale pending). Do not start until that is fully
-finished — the two are independent (frontend vs backend), but sequencing avoids
-churn on the same `OdometryPipeline` file.
-
 ## Goal
 Add Shi-Tomasi corners + Lucas-Kanade (KLT) optical flow as a first-class
 alternative to descriptor matching, **without duplicating the backend**
@@ -122,12 +117,28 @@ OpenCV `video`/`imgproc` already linked for KLT/goodFeaturesToTrack).
   unaffected — they live in the backend.
 
 ## Phasing
-- **OF-0 — extract.** Introduce `IFrontend` + `DescriptorFrontend` +
-  `FrontendFactory`; move detect+match and anchor state out of the pipeline.
-  Pure refactor. **Acceptance: byte-for-byte identical CSVs** on a KITTI/MUN
-  baseline vs the pre-refactor binary.
-- **OF-1 — optical flow.** `OpticalFlowFrontend` (Shi-Tomasi + KLT + FB error +
-  replenish), config-selectable.
+- **OF-0 — extract. DONE & VERIFIED.** `IFrontend` + `FrontendResult` +
+  `DescriptorFrontend` + `FrontendFactory` in `odometry/frontend/`; pipeline owns
+  an `IFrontend` (no more `detector`/`matcher`/anchor state). Acceptance met:
+  md5-identical CSV vs the pre-refactor binary (LBA off, 1 thread). Config
+  `frontend: descriptor` (default).
+- **OF-1 — optical flow. DONE & VERIFIED.** `OpticalFlowFrontend` (Shi-Tomasi
+  `goodFeaturesToTrack` + KLT `calcOpticalFlowPyrLK`, frame-to-frame with
+  persistent track IDs, forward-backward-error rejection, corner replenish on
+  promoteKeyframe), config-selectable `frontend: optical_flow` + `optical_flow:`
+  param block. **Spatial bucketing**: when `bucketing.enabled`, corners are
+  detected per grid cell up to `max_features_per_bucket` (counting live tracks
+  per cell) so they stay distributed; otherwise a global `max_corners` cap. The
+  per-cell detection is **multithreaded** (`cv::parallel_for_` over cells, serial
+  cell-order merge → deterministic, output-identical to serial). Runs NaN-free
+  with a metric path matching the descriptor baseline; the descriptor path stays
+  byte-identical (OF-1 is additive).
+  - *Trackability finding (299-frame window):* bucketing does NOT cost
+    trackability — the per-frame KLT drop rate is identical with/without (2.3%),
+    while bucketing keeps ~30% more tracks (1876 vs 1440 avg) with better spatial
+    coverage. With the MT detection, bucketed OF is also the fastest config
+    (30 vs 24 fps), since per-cell detection on small regions in parallel beats a
+    single global `goodFeaturesToTrack` over the whole frame.
 - **OF-2 (optional) — track IDs to LBA.** Route native OF track IDs into the
   LBA, bypassing `assignTrackIDs` for the OF path.
 

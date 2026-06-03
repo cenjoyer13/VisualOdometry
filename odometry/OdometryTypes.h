@@ -115,6 +115,16 @@ struct LBAParams {
     double max_correction_rotation_deg = 5.0;
 };
 
+struct OpticalFlowParams {
+    int max_corners = 1000;
+    double quality_level = 0.01;
+    double min_distance = 10.0;
+    int win_size = 21;
+    int max_level = 3;
+    double fb_error_threshold = 1.0;   // forward-backward reprojection (px)
+    int min_tracks = 150;              // (reserved) replenish floor
+};
+
 struct OdometryConfig {
     ComputeBackend backend = ComputeBackend::CPU;
     CameraIntrinsics intrinsics;
@@ -122,6 +132,8 @@ struct OdometryConfig {
     std::string detector_type = "SIFT";
     std::string matcher_type = "FLANN";
     std::string pose_estimator_type = "Essential";   // "Essential" | "Homography"
+    std::string frontend_type = "descriptor";        // "descriptor" | "optical_flow"
+    OpticalFlowParams optical_flow_params;
 
     // Keyframing caps. The frontend anchor is held while parallax accumulates;
     // a keyframe is forced (to keep matching alive) once matches drop below

@@ -4,8 +4,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "detectors/DetectorFactory.h"
-#include "matchers/MatcherFactory.h"
+#include "frontend/FrontendFactory.h"
 #include "pose_estimators/PoseEstimatorFactory.h"
 #include "scale_estimators/ScaleEstimatorFactory.h"
 #include "integrators/IntegratorFactory.h"
@@ -14,8 +13,7 @@ std::unique_ptr<OdometryPipeline> OdometryPipeline::build(const OdometryConfig& 
     std::cout << "[OdometryPipeline] Initiating build sequence..." << std::endl;
     return std::make_unique<OdometryPipeline>(
         config,
-        DetectorFactory::create(config),
-        MatcherFactory::create(config),
+        FrontendFactory::create(config),
         PoseEstimatorFactory::create(config),
         ScaleEstimatorFactory::create(config),
         IntegratorFactory::create(config)
@@ -23,18 +21,16 @@ std::unique_ptr<OdometryPipeline> OdometryPipeline::build(const OdometryConfig& 
 }
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
-                                   std::unique_ptr<IFeatureDetector> d,
-                                   std::unique_ptr<IFeatureMatcher> m,
+                                   std::unique_ptr<IFrontend> f,
                                    std::unique_ptr<IPoseEstimator> p,
                                    std::unique_ptr<IScaleEstimator> s,
                                    std::unique_ptr<ITrajectoryIntegrator> i)
-    : config(cfg), 
-      detector(std::move(d)), 
-      matcher(std::move(m)), 
-      pose_estimator(std::move(p)), 
-      scale_estimator(std::move(s)), 
+    : config(cfg),
+      frontend(std::move(f)),
+      pose_estimator(std::move(p)),
+      scale_estimator(std::move(s)),
       integrator(std::move(i)),
-      is_first_frame(true) 
+      is_first_frame(true)
 {
     if (config.use_local_ba) {
         cv::Mat K = (cv::Mat_<double>(3, 3) <<
@@ -64,99 +60,28 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
     last_frame_time_ = timestamp;  // Phase 0: stored for upcoming IMU preintegration
     auto t_start_total = std::chrono::high_resolution_clock::now();
 
-    // Detection.
-    auto t0 = std::chrono::high_resolution_clock::now();
-    std::vector<cv::KeyPoint> curr_keypoints;
-    DeviceBuffer curr_descriptors;
-    detector->detect(frame, curr_keypoints, curr_descriptors);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    metrics.time_detect_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-    // Bootstrap: first frame has no predecessor to match against, so just
-    // store it and return.
+    // Bootstrap: first frame has no predecessor; the frontend stores the anchor.
     if (is_first_frame) {
-        prev_image = frame;
-        prev_descriptors = curr_descriptors;
-        prev_keypoints = curr_keypoints;
+        frontend->initialize(frame);
         gt_prev = current_gt;
         is_first_frame = false;
-
         // Debug frame for frame 0 is the raw input (no tracks to draw yet).
         debug_frame = frame.getAsCPU().clone();
         return;
     }
 
-    // Matching.
-    t0 = std::chrono::high_resolution_clock::now();
-    std::vector<cv::DMatch> good_matches = matcher->match(
-        prev_descriptors, curr_descriptors,
-        prev_keypoints, curr_keypoints
-    );
-    t1 = std::chrono::high_resolution_clock::now();
-    metrics.time_match_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-    // Build an index map for the LBA backend: matched_prev_idx[curr_idx]
-    // holds the matching index in the previous frame, or -1 if unmatched.
-    std::vector<int> matched_prev_idx(curr_keypoints.size(), -1);
-    for (const auto& match : good_matches) {
-        matched_prev_idx[match.trainIdx] = match.queryIdx;
-    }
-
-    // Lift the cv::DMatch pairs into raw 2D points for the pose estimator.
-    std::vector<cv::Point2f> pts_prev;
-    std::vector<cv::Point2f> pts_curr;
-    pts_prev.reserve(good_matches.size());
-    pts_curr.reserve(good_matches.size());
-
-    for (const auto& match : good_matches) {
-        pts_prev.push_back(prev_keypoints[match.queryIdx].pt);
-        pts_curr.push_back(curr_keypoints[match.trainIdx].pt);
-    }
-
-    // Debug overlay: matched feature tracks on the input frame.
-    cv::Mat color_frame;
-    cv::Mat cpu_img = frame.getAsCPU();
-    if (cpu_img.channels() == 1) {
-        cv::cvtColor(cpu_img, color_frame, cv::COLOR_GRAY2BGR);
-    } else {
-        color_frame = cpu_img.clone();
-    }
-
-    // Bucketing grid overlay (only when bucketing is enabled).
-    if (config.bucketing_params.enabled) {
-        int cols = config.bucketing_params.grid_cols;
-        int rows = config.bucketing_params.grid_rows;
-        int width = color_frame.cols;
-        int height = color_frame.rows;
-
-        float cell_w = static_cast<float>(width) / cols;
-        float cell_h = static_cast<float>(height) / rows;
-
-        cv::Scalar grid_color(255, 50, 50);
-
-        for (int i = 1; i < cols; ++i) {
-            int x = static_cast<int>(i * cell_w);
-            cv::line(color_frame, cv::Point(x, 0), cv::Point(x, height), grid_color, 1, cv::LINE_AA);
-        }
-        for (int i = 1; i < rows; ++i) {
-            int y = static_cast<int>(i * cell_h);
-            cv::line(color_frame, cv::Point(0, y), cv::Point(width, y), grid_color, 1, cv::LINE_AA);
-        }
-    }
-
-    // Feature tracks: red line from previous to current, green dot at current.
-    for (size_t i = 0; i < pts_curr.size(); i++) {
-        cv::line(color_frame, pts_prev[i], pts_curr[i], cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-        cv::circle(color_frame, pts_curr[i], 3, cv::Scalar(0, 255, 0), -1, cv::LINE_AA);
-    }
-
-    debug_frame = color_frame;
+    // Frontend: correspondences of the current frame against the keyframe anchor
+    // (detect+match for the descriptor frontend, KLT for optical flow).
+    FrontendResult fr = frontend->process(frame);
+    metrics.time_detect_ms = fr.detect_ms;
+    metrics.time_match_ms = fr.match_ms;
+    debug_frame = fr.debug_overlay;
 
     // Pose recovery.
-    t0 = std::chrono::high_resolution_clock::now();
+    auto t0 = std::chrono::high_resolution_clock::now();
     cv::Mat R, t;
-    bool pose_success = pose_estimator->estimatePose(pts_prev, pts_curr, config.intrinsics, R, t);
-    t1 = std::chrono::high_resolution_clock::now();
+    bool pose_success = pose_estimator->estimatePose(fr.pts_prev, fr.pts_curr, config.intrinsics, R, t);
+    auto t1 = std::chrono::high_resolution_clock::now();
     metrics.time_pose_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     if (pose_success) {
@@ -165,7 +90,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
         // degenerate decomposition).
         const double norm_t = cv::norm(t);
         const bool stationary = (norm_t <= 1e-6);
-        const int num_matches = static_cast<int>(good_matches.size());
+        const int num_matches = static_cast<int>(fr.pts_prev.size());
 
         // Keyframing decision:
         //  - real keyframe: motion recovered (enough parallax) -> integrate.
@@ -206,9 +131,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
 
             // Advance the frontend anchor (the new keyframe) before pushing to
             // LBA so the next match's indices line up with what was just pushed.
-            prev_image = frame;
-            prev_descriptors = curr_descriptors;
-            prev_keypoints = curr_keypoints;
+            frontend->promoteKeyframe(frame);
             gt_prev = current_gt;
             frames_since_keyframe_ = 0;
 
@@ -245,10 +168,8 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
                 integrator->getSnapshot(frame_id, snap);
                 new_frame.T_world = snap;
 
-                std::vector<cv::Point2f> curr_pts;
-                cv::KeyPoint::convert(curr_keypoints, curr_pts);
-                new_frame.points2D = curr_pts;
-                new_frame.matched_prev_idx = matched_prev_idx;
+                new_frame.points2D = fr.points2D;
+                new_frame.matched_prev_idx = fr.matched_prev_idx;
                 new_frame.imu_samples = std::move(kf_imu);
 
                 lba_->pushFrame(new_frame);
