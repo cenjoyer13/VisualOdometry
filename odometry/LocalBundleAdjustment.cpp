@@ -1,4 +1,5 @@
 #include "LocalBundleAdjustment.h"
+#include "inertial/ImuPreintegrator.h"
 #include <iostream>
 #include <cmath>
 #include <limits>
@@ -16,8 +17,10 @@
 
 using gtsam::symbol_shorthand::X;
 
-LocalBundleAdjustment::LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params, bool verbose)
+LocalBundleAdjustment::LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params,
+                                             const ImuParams& imu_params, bool verbose)
     : params_(params),
+      imu_params_(imu_params),
       verbose_(verbose),
       K_(K.clone()),
       is_running_(false) {
@@ -229,6 +232,41 @@ void LocalBundleAdjustment::runOptimization() {
             X(i - 1), X(i), measurement,
             tight ? stationaryNoise : betweenNoise);
         ++between_count;
+    }
+
+    // IMU gyro rotation prior (mode == Gyro): a rotation-only BetweenFactor from
+    // the preintegrated gyro, tight on rotation and effectively free on
+    // translation, so it sharpens relative rotation without touching the
+    // VO-owned scale. Skipped per-edge when no IMU covered that interval.
+    if (imu_params_.mode == ImuMode::Gyro) {
+        gtsam::Vector6 gyroSigmas;
+        gyroSigmas << imu_params_.gyro_rot_sigma, imu_params_.gyro_rot_sigma, imu_params_.gyro_rot_sigma,
+                      1e6, 1e6, 1e6;
+        auto gyroNoise = gtsam::noiseModel::Diagonal::Sigmas(gyroSigmas);
+        int gyro_count = 0;
+        double disc_sum_deg = 0.0;
+        int disc_n = 0;
+        for (size_t i = 1; i < local_window_.size(); ++i) {
+            const auto& samples = local_window_[i].imu_samples;
+            if (samples.size() < 2) continue;
+            gtsam::Rot3 dR = ImuPreintegrator::integrateGyro(samples, imu_params_.R_cam_imu);
+            graph.emplace_shared<gtsam::BetweenFactor<gtsam::Pose3>>(
+                X(i - 1), X(i), gtsam::Pose3(dR, gtsam::Point3(0, 0, 0)), gyroNoise);
+            ++gyro_count;
+
+            // Frame-sync diagnostic: the gyro and VO relative rotations should
+            // agree to a few degrees once R_cam_imu is correct. A ~90 deg mean
+            // discrepancy signals a wrong/absent extrinsic.
+            if (verbose_ && !local_window_[i].is_stationary &&
+                !local_window_[i].R.empty() && !local_window_[i].t.empty()) {
+                gtsam::Rot3 vo_dR = relativePoseMeasurement(local_window_[i].R, local_window_[i].t).rotation();
+                disc_sum_deg += gtsam::Rot3::Logmap(dR.between(vo_dR)).norm() * 180.0 / M_PI;
+                ++disc_n;
+            }
+        }
+        if (verbose_)
+            std::cout << "[LBA] gyro rotation priors: " << gyro_count
+                      << "  mean|gyro-VO| = " << (disc_n ? disc_sum_deg / disc_n : 0.0) << " deg\n";
     }
 
     // SmartProjectionPoseFactors.

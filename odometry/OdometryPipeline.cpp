@@ -1,6 +1,8 @@
 #include "OdometryPipeline.h"
 #include <iostream>
 #include <chrono>
+#include <algorithm>
+#include <utility>
 
 #include "detectors/DetectorFactory.h"
 #include "matchers/MatcherFactory.h"
@@ -40,14 +42,26 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
             0.0, config.intrinsics.fy, config.intrinsics.cy,
             0.0, 0.0, 1.0);
 
-        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_params, config.verbose);
+        lba_ = std::make_unique<LocalBundleAdjustment>(K, config.lba_params, config.imu_params, config.verbose);
         lba_->start();
     }
 
     std::cout << "[OdometryPipeline] Pipeline successfully assembled and ready." << std::endl;
 }
 
+void OdometryPipeline::addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr) {
+    // Phase 0: buffer only. Preintegration consumes this in a later phase.
+    imu_buffer_.push_back(ImuSample{t, acc, gyr});
+}
+
 void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt) {
+    // Legacy vision-only path: synthesize a monotonic timestamp so IMU-aware
+    // callers and vision-only callers share one implementation.
+    processFrame(frame, current_gt, static_cast<double>(synthetic_frame_counter_++));
+}
+
+void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt, double timestamp) {
+    last_frame_time_ = timestamp;  // Phase 0: stored for upcoming IMU preintegration
     auto t_start_total = std::chrono::high_resolution_clock::now();
 
     // Detection.
@@ -184,6 +198,20 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
             gt_prev = current_gt;
             frames_since_keyframe_ = 0;
 
+            // Slice the IMU buffer for this keyframe interval (gyro/vio modes).
+            // Drained up to this frame's time; empty when no IMU is active.
+            std::vector<ImuSample> kf_imu;
+            if (config.imu_params.enabled()) {
+                for (const auto& s : imu_buffer_)
+                    if (s.t > last_keyframe_time_ && s.t <= last_frame_time_)
+                        kf_imu.push_back(s);
+                imu_buffer_.erase(
+                    std::remove_if(imu_buffer_.begin(), imu_buffer_.end(),
+                        [&](const ImuSample& s) { return s.t <= last_frame_time_; }),
+                    imu_buffer_.end());
+                last_keyframe_time_ = last_frame_time_;
+            }
+
             if (lba_ && !R.empty() && !t.empty()) {
                 // Snapshot the integrator's world pose AFTER integrate() so the
                 // snapshot reflects this frame's pose in the world. The LBA
@@ -207,6 +235,7 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
                 cv::KeyPoint::convert(curr_keypoints, curr_pts);
                 new_frame.points2D = curr_pts;
                 new_frame.matched_prev_idx = matched_prev_idx;
+                new_frame.imu_samples = std::move(kf_imu);
 
                 lba_->pushFrame(new_frame);
             }

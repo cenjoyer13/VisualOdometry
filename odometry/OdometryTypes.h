@@ -4,6 +4,8 @@
 #include <map>
 #include <string>
 
+#include "inertial/ImuTypes.h"
+
 // Backend routing tag carried on every detector/matcher.
 enum class ComputeBackend {
     CPU,
@@ -126,6 +128,9 @@ struct OdometryConfig {
     // keyframe_min_matches or the anchor has been held keyframe_max_skip frames.
     int keyframe_max_skip = 20;
     int keyframe_min_matches = 30;
+
+    // Optional IMU layer (default ImuMode::Off = vision-only, unchanged).
+    ImuParams imu_params;
 
     int num_threads = 1;
     // Global debug toggle, set by YAML system.verbose or CLI --debug.

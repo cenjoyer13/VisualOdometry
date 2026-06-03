@@ -24,6 +24,42 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
         if (!kf["min_matches"].empty()) out.keyframe_min_matches = (int)kf["min_matches"];
     }
 
+    // Optional IMU block. Absent (or mode != gyro/vio) leaves the vision-only
+    // path untouched.
+    cv::FileNode imu = fs["imu"];
+    if (!imu.empty()) {
+        if (!imu["mode"].empty()) {
+            std::string m = (std::string)imu["mode"];
+            if (m == "gyro")     out.imu_params.mode = ImuMode::Gyro;
+            else if (m == "vio") out.imu_params.mode = ImuMode::Vio;
+            else                 out.imu_params.mode = ImuMode::Off;
+        }
+        if (!imu["topic"].empty())  out.imu_params.topic  = (std::string)imu["topic"];
+        if (!imu["acc_n"].empty())  out.imu_params.acc_n  = (double)imu["acc_n"];
+        if (!imu["gyr_n"].empty())  out.imu_params.gyr_n  = (double)imu["gyr_n"];
+        if (!imu["acc_w"].empty())  out.imu_params.acc_w  = (double)imu["acc_w"];
+        if (!imu["gyr_w"].empty())  out.imu_params.gyr_w  = (double)imu["gyr_w"];
+        if (!imu["g_norm"].empty()) out.imu_params.g_norm = (double)imu["g_norm"];
+        if (!imu["td"].empty())     out.imu_params.td     = (double)imu["td"];
+        if (!imu["init"].empty())   out.imu_params.init   = (std::string)imu["init"];
+        if (!imu["gyro_rot_sigma"].empty()) out.imu_params.gyro_rot_sigma = (double)imu["gyro_rot_sigma"];
+
+        // IMU-camera extrinsic: R_cam_imu = rotation(body_T_cam0)^T, so IMU-frame
+        // angular velocity can be expressed in the camera/VO frame. Without it the
+        // gyro prior would constrain the wrong axes.
+        cv::FileNode ext = fs["body_T_cam0"];
+        if (!ext.empty()) {
+            cv::Mat T; ext >> T;
+            if (T.rows == 4 && T.cols == 4) {
+                cv::Mat Rt; T(cv::Rect(0, 0, 3, 3)).convertTo(Rt, CV_64F);
+                cv::Mat Rci = Rt.t();
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c)
+                        out.imu_params.R_cam_imu(r, c) = Rci.at<double>(r, c);
+            }
+        }
+    }
+
     // Detector params (per-type block under detector.<type>)
     cv::FileNode d_node = fs["detector"][out.detector_type];
     if (!d_node.empty()) {

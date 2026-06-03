@@ -10,7 +10,7 @@ rosbag:
   gps_topic: /fix
   imu_topic: /imu/data
   start_time: 20.0           
-  end_time: 270.0                 
+  end_time: 300.0                 
 
 
 detector:

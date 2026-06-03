@@ -398,11 +398,19 @@ int main(int argc, char** argv) {
         if (rel_ns < skip_ns) continue;
 
         if (topic == bag_cfg.imu_topic) {
-            if (use_ppk) continue;  // attitude GT comes from the FRL file instead
             auto imu = m.instantiate<sensor_msgs::Imu>();
             if (!imu) continue;
-            cur_R = quatToRot(imu->orientation.x, imu->orientation.y,
-                              imu->orientation.z, imu->orientation.w);
+            // Feed the inertial layer (gyro/vio modes); no-op when IMU is off.
+            // Use the IMU sensor-clock stamp so the camera-IMU td offset lines up.
+            if (config.imu_params.enabled()) {
+                pipeline->addImu(imu->header.stamp.toSec(),
+                    cv::Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z),
+                    cv::Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z));
+            }
+            // GT attitude from the IMU orientation only when PPK/FRL isn't driving it.
+            if (!use_ppk)
+                cur_R = quatToRot(imu->orientation.x, imu->orientation.y,
+                                  imu->orientation.z, imu->orientation.w);
             continue;
         }
 
@@ -445,9 +453,13 @@ int main(int argc, char** argv) {
         // Hold images until the first GPS / PPK packet pins the local origin.
         if (!have_origin) continue;
 
-        cv::Mat frame = decodeImage(m.instantiate<sensor_msgs::Image>());
+        auto img_msg = m.instantiate<sensor_msgs::Image>();
+        cv::Mat frame = decodeImage(img_msg);
         if (frame.empty()) continue;
         if (camera) frame = camera->undistortImage(frame);
+
+        // Image timestamp on the IMU clock: image_clock + td = imu_clock.
+        const double frame_time = img_msg->header.stamp.toSec() + config.imu_params.td;
 
         GroundTruthData current_gt;
         current_gt.position = cur_position;
@@ -456,7 +468,7 @@ int main(int argc, char** argv) {
         current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
 
         DeviceBuffer frame_buffer(frame);
-        pipeline->processFrame(frame_buffer, current_gt);
+        pipeline->processFrame(frame_buffer, current_gt, frame_time);
 
         if (pipeline->isTrackingActive()) {
             // Body-referenced VO pose in the display frame: extrinsic + the

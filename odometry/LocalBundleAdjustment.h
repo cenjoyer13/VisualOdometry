@@ -37,6 +37,11 @@ struct BAFrame {
 
     // Backend fills this: the global landmark ID assigned per 2D point.
     std::vector<int64_t> track_ids;
+
+    // IMU samples covering (previous keyframe, this keyframe]. Empty unless an
+    // IMU mode is active. Used to build the gyro rotation prior (and, later,
+    // the CombinedImuFactor).
+    std::vector<ImuSample> imu_samples;
 };
 
 // Output of one LBA pass: the optimized world-frame pose for the newest
@@ -49,7 +54,8 @@ struct BACorrection {
 
 class LocalBundleAdjustment {
 public:
-    LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params, bool verbose = false);
+    LocalBundleAdjustment(const cv::Mat& K, const LBAParams& params,
+                          const ImuParams& imu_params, bool verbose = false);
     ~LocalBundleAdjustment();
 
     void start();
@@ -63,6 +69,7 @@ private:
     void runOptimization();
 
     LBAParams params_;
+    ImuParams imu_params_;
     bool verbose_ = false;
     cv::Mat K_;
 

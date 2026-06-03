@@ -96,3 +96,14 @@ aligner:
 keyframe:
   min_matches: 12
   max_skip: 40
+
+imu:
+  mode: gyro
+  topic: /imu/data
+  acc_n: 0.08
+  gyr_n: 0.004
+  acc_w: 0.00004
+  gyr_w: 0.0001
+  g_norm: 9.803
+  td: -0.0297405129318
+  gyro_rot_sigma: 0.002

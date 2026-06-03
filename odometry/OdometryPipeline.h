@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 #include <vector>
+#include <cstdint>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -39,6 +40,14 @@ private:
     // producing a new one. Caps how long the anchor is held (see processFrame).
     int frames_since_keyframe_ = 0;
 
+    // IMU buffering (Phase 0: accumulated only; consumed by preintegration in a
+    // later phase). Timestamp of the most recent processFrame; synthetic counter
+    // backs the legacy 2-arg overload so vision-only callers stay unchanged.
+    std::vector<ImuSample> imu_buffer_;
+    double last_frame_time_ = -1.0;
+    double last_keyframe_time_ = -1.0;
+    uint64_t synthetic_frame_counter_ = 0;
+
 public:
     ~OdometryPipeline();
 
@@ -51,7 +60,16 @@ public:
                      std::unique_ptr<IScaleEstimator> s,
                      std::unique_ptr<ITrajectoryIntegrator> i);
 
+    // Vision-only entry point (unchanged). Forwards with a synthetic timestamp
+    // and no IMU association.
     void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt);
+
+    // Timestamped entry point. timestamp (seconds) tags the frame so buffered
+    // IMU can be associated to keyframe intervals in later phases.
+    void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt, double timestamp);
+
+    // Feed a single IMU sample. Buffered in timestamp order by the caller.
+    void addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr);
 
     cv::Mat getGlobalTransformVO() const;
     bool isTrackingActive() const;
