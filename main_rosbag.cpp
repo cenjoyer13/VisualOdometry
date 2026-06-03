@@ -466,6 +466,9 @@ int main(int argc, char** argv) {
         float pitch, roll, yaw;
         PoseMath::extractEulerFromRotation(cur_R, pitch, roll, yaw);
         current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
+        // Altimeter (AGL) for homography metric scale; left NaN when disabled.
+        if (bag_cfg.altimeter_scale)
+            current_gt.altitude = (float)(cur_alt - baseline_agl);
 
         DeviceBuffer frame_buffer(frame);
         pipeline->processFrame(frame_buffer, current_gt, frame_time);

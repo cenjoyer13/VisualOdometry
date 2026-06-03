@@ -205,6 +205,7 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     if (!n["ppk_path"].empty())   out.ppk_path  = (std::string)n["ppk_path"];
     if (!n["start_time"].empty()) out.start_time = (double)n["start_time"];
     if (!n["end_time"].empty())   out.end_time   = (double)n["end_time"];
+    if (!n["altimeter_scale"].empty()) out.altimeter_scale = ((int)n["altimeter_scale"] != 0);
 
     // cam0->body extrinsic (top-level opencv-matrix). Left empty when absent,
     // which the evaluator treats as identity.

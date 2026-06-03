@@ -1,7 +1,18 @@
 # IMU (gyro) + altimeter-scale plan
 
-Status: **Phase 0 + Phase 1 (gyro) done & verified. Full VIO dropped (see
-decision record). Remaining: Phase 2 — altimeter-from-homography metric scale.**
+Status: **Phase 0 + Phase 1 (gyro) + Phase 2 (altimeter scale) done & verified.
+Full VIO dropped (see decision record). IMU plan complete.**
+
+Phase 2 verified: with `rosbag.altimeter_scale: 1` + `pose_estimator: Homography`,
+the trajectory is metric from `t/d · AGL` (no GT-cheat). With the flag off, the
+path is byte-identical to before and NaN-free.
+
+**Gotcha (fixed):** the absent-altitude sentinel must NOT be NaN. The build uses
+`-ffast-math`, which folds `std::isnan(x)` to `false`, so `!std::isnan(altitude)`
+was true for the unset (NaN) altitude — the altimeter branch ran with a NaN scale
+and `integrate(I, 0, NaN)` poisoned `T_VO` from the first keyframe (the NaN the
+user saw in the visualizer). Now `GroundTruthData.altitude` defaults to `-1` and
+"valid" is `altitude > 0`. Avoid `isnan` anywhere in this codebase.
 
 Scope is now deliberately narrow: use the IMU **gyro** for rotation, and resolve
 the monocular **scale** geometrically from an **altimeter + homography**, not
@@ -90,8 +101,13 @@ the altitude input + `pose_estimator: Homography` (config knob TBD).
   rotated by `R_cam_imu`); per-keyframe IMU slice in `BAFrame::imu_samples`;
   rotation-only `BetweenFactor<Pose3>` in the LBA; `main_rosbag` feeds
   `/imu/data` + timestamps + `td`. Verified.
-- **Phase 2 — altimeter-from-homography scale.** As designed above. Replaces the
-  dropped `vio` phase.
+- **Phase 2 — altimeter-from-homography scale. DONE.** `GroundTruthData.altitude`
+  (NaN = absent); `main_rosbag` fills it from `cur_alt - baseline_agl` when
+  `rosbag.altimeter_scale: 1`. The cheirality base no longer normalizes `t`
+  (essential's is unit, homography's is `t/d`); the pipeline normalizes in the
+  fallback branch, OR — when altitude is valid and `pose_estimator == Homography`
+  — keeps the raw `t/d` and sets `scale = AGL`. Verified metric + backwards
+  compatible.
 - ~~Phase (vio)~~ — **dropped.**
 
 ## Files

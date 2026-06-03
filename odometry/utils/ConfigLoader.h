@@ -18,6 +18,7 @@ struct RosbagConfig {
     cv::Vec3d traj_sign{1.0, 1.0, 1.0};      // per-axis sign flip for the logged trajectory
     double viz_scale = 0.5;                   // 2D trajectory visualizer px-per-metre scale
     double aligner_init_distance = 10.0;      // GT travel (m) before solving the VO->GT yaw
+    bool altimeter_scale = false;             // feed AGL so homography scale comes from altitude
 };
 
 // Wraps an OpenCV FileStorage handle and converts a YAML config file into an

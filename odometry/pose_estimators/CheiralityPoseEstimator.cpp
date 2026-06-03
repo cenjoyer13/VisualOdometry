@@ -131,9 +131,12 @@ bool CheiralityPoseEstimator::estimatePose(
         }
     });
 
-    double norm_t = cv::norm(best_t);
-    if (norm_t > 1e-6) best_t = best_t / norm_t;
-
+    // Return the raw winning translation, NOT normalized: the essential
+    // decomposition already yields a unit t, while the homography yields t/d
+    // (translation over plane distance). The pipeline normalizes to a unit
+    // direction unless it is applying altimeter scale to the homography t/d
+    // (scale = AGL = d, giving metric t). Stationary/degenerate frames still
+    // return exactly zero from the early-return guards above.
     out_R = best_R.clone();
     out_t = best_t.clone();
     return true;

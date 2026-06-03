@@ -80,6 +80,7 @@ camera:
 
 pose_estimator:
   type: Homography
+  altimeter_scale: 1
 
 system:
   backend: CPU

@@ -147,8 +147,10 @@ struct OdometryConfig {
 };
 
 struct GroundTruthData {
-    cv::Vec3f position;    
-    cv::Vec3f orientation; 
+    cv::Vec3f position;
+    cv::Vec3f orientation;
+    float altitude = -1.0f;   // AGL (m); <= 0 means not provided (NaN unusable
+                              // here: the -ffast-math build folds isnan to false)
 };
 
 struct PipelineMetrics {

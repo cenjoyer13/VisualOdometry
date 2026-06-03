@@ -183,11 +183,25 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
              frames_since_keyframe_ >= config.keyframe_max_skip);
 
         if (!stationary || forced) {
-            // Scale spans the whole keyframe-to-current baseline because gt_prev
-            // was held across the skipped frames. A forced (still-stationary)
-            // keyframe has t == 0, so it integrates nothing and its span is
-            // unrecoverable, but matching is preserved.
-            double scale = scale_estimator->updateScale(gt_prev, current_gt);
+            // Scale source:
+            //  - altimeter: when an altitude (AGL) is provided and the homography
+            //    estimator is active, its translation is the raw t/d, so the
+            //    metric scale is the plane distance d = AGL and t is left as-is.
+            //  - otherwise: normalize t to a unit direction and take the metric
+            //    distance from the scale estimator (the existing path; scale
+            //    spans the whole keyframe-to-current baseline since gt_prev was
+            //    held across any skipped frames). A forced keyframe has t == 0,
+            //    so it integrates nothing either way.
+            double scale;
+            const bool altimeter = config.pose_estimator_type == "Homography" &&
+                                   current_gt.altitude > 0.0f;
+            if (altimeter) {
+                scale = current_gt.altitude;
+            } else {
+                const double nt = cv::norm(t);
+                if (nt > 1e-6) t = t / nt;
+                scale = scale_estimator->updateScale(gt_prev, current_gt);
+            }
             integrator->integrate(R, t, scale);
 
             // Advance the frontend anchor (the new keyframe) before pushing to
