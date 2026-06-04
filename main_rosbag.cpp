@@ -25,7 +25,9 @@
 #include "odometry/camera/CameraModelFactory.h"
 #include "odometry/camera/ICameraModel.h"
 #include "odometry/utils/ConfigLoader.h"
+#ifdef USE_ONNX
 #include "odometry/utils/CudaPreload.h"
+#endif
 #include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 
@@ -310,9 +312,11 @@ int main(int argc, char** argv) {
                   << ", " << bag_cfg.traj_sign[2] << ")\n";
     }
 
+#ifdef USE_ONNX
     if (config.backend == ComputeBackend::CUDA) {
         CudaPreload::init(config.verbose);
     }
+#endif
 
     // PPK overlay (optional). If present, image-timestamped lat/lon/alt come
     // from interpolation here instead of from the GPS topic.

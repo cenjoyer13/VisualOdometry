@@ -16,7 +16,7 @@ rosbag:
 detector:
   type: ORB
   ORB:
-    nfeatures: 2000
+    nfeatures: 1000
     scaleFactor: 1.2
     nLevels: 8
     edgeThreshold: 19

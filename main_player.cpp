@@ -18,7 +18,9 @@
 #include "odometry/OdometryPipeline.h"
 #include "odometry/OdometryTypes.h"
 #include "odometry/utils/ConfigLoader.h"
+#ifdef USE_ONNX
 #include "odometry/utils/CudaPreload.h"
+#endif
 #include "odometry/utils/InputUtils.h"
 #include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
@@ -120,9 +122,11 @@ int main(int argc, char** argv) {
     }
     if (cli_debug) config.verbose = true;   // --debug overrides system.verbose.
 
+#ifdef USE_ONNX
     if (config.backend == ComputeBackend::CUDA) {
         CudaPreload::init(config.verbose);
     }
+#endif
     std::cout << "[PLAYER] Detector=" << config.detector_type
               << " Matcher=" << config.matcher_type
               << " Playback velocity=" << playback_velocity << " m/s\n";

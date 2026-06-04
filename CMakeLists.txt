@@ -46,36 +46,45 @@ message(STATUS "Found OpenCV: ${OpenCV_VERSION} at ${OpenCV_DIR}")
 message(STATUS "OpenCV CUDA modules intentionally disabled. ONNX Runtime owns GPU inference.")
 
 # =========================================================================
-# ONNX Runtime — platform-aware lookup.
+# ONNX Runtime — optional (USE_ONNX, default ON).
+#
+# Drives the deep detectors/matchers (SuperPointDetector, LightGlueMatcher)
+# and their CUDA execution provider. USE_ONNX=OFF produces a pure CPU build
+# with NO ONNX / CUDA / cuDNN dependency: those two classes and the CudaPreload
+# bootstrap are dropped from the build, the USE_ONNX compile define is absent,
+# and the factories fall back to the OpenCV detectors/matchers (ORB/SIFT,
+# Kinematic/FLANN). The deep configs (SuperPoint/LightGlue) are then unavailable.
 #
 # Linux/macOS default: /usr/local/onnxruntime (install convention used here).
 # Windows: -DONNXRUNTIME_DIR=C:/path/to/onnxruntime-win-x64-gpu-1.18.1 must
 # be passed; we fail loudly otherwise.
 # =========================================================================
-if(WIN32)
-    set(ONNXRUNTIME_DIR "" CACHE PATH "Path to ONNX Runtime install (release ZIP root)")
-    if(NOT ONNXRUNTIME_DIR)
-        message(FATAL_ERROR
-            "ONNXRUNTIME_DIR not set. Download an ONNX Runtime GPU release "
-            "(https://github.com/microsoft/onnxruntime/releases) and configure with "
-            "-DONNXRUNTIME_DIR=C:/path/to/onnxruntime-win-x64-gpu-<version>")
+option(USE_ONNX "Build the ONNX Runtime detectors/matchers (SuperPoint, LightGlue)" ON)
+
+if(USE_ONNX)
+    if(WIN32)
+        set(ONNXRUNTIME_DIR "" CACHE PATH "Path to ONNX Runtime install (release ZIP root)")
+        if(NOT ONNXRUNTIME_DIR)
+            message(FATAL_ERROR
+                "ONNXRUNTIME_DIR not set. Download an ONNX Runtime GPU release "
+                "(https://github.com/microsoft/onnxruntime/releases) and configure with "
+                "-DONNXRUNTIME_DIR=C:/path/to/onnxruntime-win-x64-gpu-<version>")
+        endif()
+    else()
+        set(ONNXRUNTIME_DIR "/usr/local/onnxruntime" CACHE PATH "Path to ONNX Runtime install")
     endif()
-else()
-    set(ONNXRUNTIME_DIR "/usr/local/onnxruntime" CACHE PATH "Path to ONNX Runtime install")
-endif()
 
-include_directories(${ONNXRUNTIME_DIR}/include)
-
-if(WIN32)
+    include_directories(${ONNXRUNTIME_DIR}/include)
     find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
+    if(NOT ONNXRUNTIME_LIB)
+        message(FATAL_ERROR "Could not find ONNX Runtime library in ${ONNXRUNTIME_DIR}/lib")
+    endif()
+    add_compile_definitions(USE_ONNX)
+    message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIB}")
 else()
-    find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${ONNXRUNTIME_DIR}/lib NO_DEFAULT_PATH)
+    set(ONNXRUNTIME_LIB "")   # empty -> harmless in the target_link_libraries lines
+    message(STATUS "USE_ONNX=OFF — CPU-only build: SuperPoint / LightGlue / CudaPreload excluded, no ONNX or CUDA dependency.")
 endif()
-
-if(NOT ONNXRUNTIME_LIB)
-    message(FATAL_ERROR "Could not find ONNX Runtime library in ${ONNXRUNTIME_DIR}/lib")
-endif()
-message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIB}")
 
 # =========================================================================
 # GTSAM
@@ -87,6 +96,10 @@ include_directories(${GTSAM_INCLUDE_DIR})
 # Odometry source library (shared by every executable target)
 # =========================================================================
 file(GLOB_RECURSE SRC_ODOMETRY CONFIGURE_DEPENDS "odometry/*.cpp")
+if(NOT USE_ONNX)
+    # Drop the ONNX detectors/matchers and the cuDNN bootstrap from the CPU build.
+    list(FILTER SRC_ODOMETRY EXCLUDE REGEX "(SuperPointDetector|LightGlueMatcher|CudaPreload)\\.cpp$")
+endif()
 
 # =========================================================================
 # KittiEvaluator — portable (Linux + Windows).

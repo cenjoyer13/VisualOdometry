@@ -18,6 +18,15 @@
       }
     },
     {
+      "name": "release-optimized-cpu",
+      "displayName": "Release CPU-only, no ONNX/CUDA (Linux / GCC)",
+      "inherits": "release-optimized",
+      "binaryDir": "${sourceDir}/build-cpu",
+      "cacheVariables": {
+        "USE_ONNX": "OFF"
+      }
+    },
+    {
       "name": "windows-msvc-release",
       "displayName": "Release with Optimizations (Windows / MSVC)",
       "generator": "Visual Studio 17 2022",
@@ -42,6 +51,10 @@
     {
       "name": "release-optimized",
       "configurePreset": "release-optimized"
+    },
+    {
+      "name": "release-optimized-cpu",
+      "configurePreset": "release-optimized-cpu"
     },
     {
       "name": "windows-msvc-release",

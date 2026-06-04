@@ -132,7 +132,15 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame, const GroundTruthData& 
             // Advance the frontend anchor (the new keyframe) before pushing to
             // LBA so the next match's indices line up with what was just pushed.
             frontend->promoteKeyframe(frame);
-            gt_prev = current_gt;
+            // Only advance the scale baseline when motion was actually
+            // integrated. A forced keyframe is stationary (t == 0): re-anchoring
+            // keeps matching alive on a low-feature / low-parallax patch, but
+            // advancing gt_prev here would consume the GT baseline as a no-op and
+            // permanently drop the displacement across the patch (the same
+            // high-FPS scale loss the hold branch above guards against). Holding
+            // gt_prev lets the next real keyframe integrate the full patch
+            // baseline as a catch-up step.
+            if (!stationary) gt_prev = current_gt;
             frames_since_keyframe_ = 0;
 
             // Slice the IMU buffer for this keyframe interval (gyro/vio modes).
