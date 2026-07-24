@@ -92,6 +92,13 @@ endif()
 find_package(GTSAM REQUIRED)
 include_directories(${GTSAM_INCLUDE_DIR})
 
+# GTSAM's own lib dir usually isn't on the system loader path (it's a
+# hand-built install under claude-sandbox/, not a system package), so every
+# RPATH below that links gtsam also needs this appended — otherwise the
+# binary fails at launch with "libgtsam.so.4 => not found" unless
+# LD_LIBRARY_PATH is set manually first.
+get_filename_component(GTSAM_LIB_DIR "${GTSAM_INCLUDE_DIR}/../lib" ABSOLUTE)
+
 # =========================================================================
 # Odometry source library (shared by every executable target)
 # =========================================================================
@@ -120,9 +127,41 @@ target_link_libraries(KittiEvaluator PRIVATE
 if(UNIX)
     # RPATH: lets the binary find libonnxruntime.so and the bundled cuda12_libs
     # without LD_LIBRARY_PATH gymnastics. $ORIGIN/.. = repo root from build/.
+    # --disable-new-dtags: emit old-style DT_RPATH instead of DT_RUNPATH.
+    # DT_RUNPATH (the modern default) only resolves the *executable's own*
+    # direct NEEDED entries; libgtsam.so.4 itself needs libmetis-gtsam.so /
+    # libcephes-gtsam.so.1 from the same install dir, and as a grandchild
+    # dependency it's only found via the executable's path list if that path
+    # list is the (transitively-inherited) old-style RPATH.
     set_target_properties(KittiEvaluator PROPERTIES
-        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs"
-        BUILD_WITH_INSTALL_RPATH TRUE)
+        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        LINK_FLAGS "-Wl,--disable-new-dtags")
+endif()
+
+# =========================================================================
+# OdomLogEvaluator — portable (Linux + Windows).
+# Replays a bare folder of frame_NNNNNN.jpg images (no ground truth) through
+# the pipeline. Used for sanity-checking new captures that have no pose/PPK
+# source. No AirSim/ROS dependency.
+# =========================================================================
+add_executable(OdomLogEvaluator
+    main_odomlog.cpp
+    ${SRC_ODOMETRY}
+)
+
+target_link_libraries(OdomLogEvaluator PRIVATE
+    ${OpenCV_LIBS}
+    ${ONNXRUNTIME_LIB}
+    gtsam
+    ${CMAKE_DL_LIBS}
+)
+
+if(UNIX)
+    set_target_properties(OdomLogEvaluator PROPERTIES
+        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        LINK_FLAGS "-Wl,--disable-new-dtags")
 endif()
 
 # =========================================================================
@@ -166,8 +205,9 @@ if(UNIX AND ROS_ROOT)
         # RPATH so the binary can find both ONNX RT / cuDNN AND the ROS libs
         # without LD_LIBRARY_PATH gymnastics.
         set_target_properties(RosbagEvaluator PROPERTIES
-            INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${ROS_ROOT}/lib"
-            BUILD_WITH_INSTALL_RPATH TRUE)
+            INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${ROS_ROOT}/lib:${GTSAM_LIB_DIR}"
+            BUILD_WITH_INSTALL_RPATH TRUE
+            LINK_FLAGS "-Wl,--disable-new-dtags")
     else()
         message(WARNING "ROS_ROOT set but rosbag libraries not found under ${ROS_ROOT}/lib — skipping RosbagEvaluator.")
     endif()

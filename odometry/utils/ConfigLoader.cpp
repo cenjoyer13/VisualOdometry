@@ -1,4 +1,42 @@
 #include "ConfigLoader.h"
+#include <cctype>
+
+namespace {
+
+// OpenCV's YAML reader hands back scalar strings verbatim -- it does NOT strip a
+// trailing inline comment or surrounding whitespace. So
+//
+//     pose_estimator:
+//       type: Homography   # planar scene
+//
+// yields the literal "Homography   # planar scene", which fails every
+// `== "Homography"` keyword test downstream and silently falls back to a
+// default (this cost a debugging session: run6 quietly ran the Essential
+// estimator on a planar scene). Trim once, here, at the single point where
+// strings enter the config.
+//
+// An inline comment is a '#' preceded by whitespace, matching YAML's own rule --
+// so a '#' inside a path or topic name is left alone.
+std::string trimScalar(const std::string& raw) {
+    std::string s = raw;
+    for (size_t i = 1; i < s.size(); ++i) {
+        if (s[i] == '#' && std::isspace(static_cast<unsigned char>(s[i - 1]))) {
+            s.erase(i);
+            break;
+        }
+    }
+    const size_t first = s.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return std::string();
+    const size_t last = s.find_last_not_of(" \t\r\n");
+    return s.substr(first, last - first + 1);
+}
+
+// Reads a FileNode as a trimmed string. Use everywhere a string leaves the YAML.
+std::string readStr(const cv::FileNode& n) {
+    return trimScalar((std::string)n);
+}
+
+}  // namespace
 
 ConfigLoader::ConfigLoader(const std::string& yaml_path)
     : fs(yaml_path, cv::FileStorage::READ) {}
@@ -8,16 +46,21 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
 
     // Detector / matcher / pose-estimator selection
     if (!fs["detector"]["type"].empty()) {
-        out.detector_type = (std::string)fs["detector"]["type"];
+        out.detector_type = readStr(fs["detector"]["type"]);
     }
     if (!fs["matcher"]["type"].empty()) {
-        out.matcher_type = (std::string)fs["matcher"]["type"];
+        out.matcher_type = readStr(fs["matcher"]["type"]);
     }
     if (!fs["pose_estimator"]["type"].empty()) {
-        out.pose_estimator_type = (std::string)fs["pose_estimator"]["type"];
+        out.pose_estimator_type = readStr(fs["pose_estimator"]["type"]);
+    }
+    cv::FileNode se_node = fs["scale_estimator"];
+    if (!se_node.empty()) {
+        if (!se_node["type"].empty()) out.scale_estimator_type = readStr(se_node["type"]);
+        if (!se_node["step"].empty()) out.scale_estimator_unit_step = (double)se_node["step"];
     }
     if (!fs["frontend"].empty()) {
-        out.frontend_type = (std::string)fs["frontend"];
+        out.frontend_type = readStr(fs["frontend"]);
     }
     cv::FileNode of = fs["optical_flow"];
     if (!of.empty()) {
@@ -43,19 +86,19 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
     cv::FileNode imu = fs["imu"];
     if (!imu.empty()) {
         if (!imu["mode"].empty()) {
-            std::string m = (std::string)imu["mode"];
+            std::string m = readStr(imu["mode"]);
             if (m == "gyro")     out.imu_params.mode = ImuMode::Gyro;
             else if (m == "vio") out.imu_params.mode = ImuMode::Vio;
             else                 out.imu_params.mode = ImuMode::Off;
         }
-        if (!imu["topic"].empty())  out.imu_params.topic  = (std::string)imu["topic"];
+        if (!imu["topic"].empty())  out.imu_params.topic  = readStr(imu["topic"]);
         if (!imu["acc_n"].empty())  out.imu_params.acc_n  = (double)imu["acc_n"];
         if (!imu["gyr_n"].empty())  out.imu_params.gyr_n  = (double)imu["gyr_n"];
         if (!imu["acc_w"].empty())  out.imu_params.acc_w  = (double)imu["acc_w"];
         if (!imu["gyr_w"].empty())  out.imu_params.gyr_w  = (double)imu["gyr_w"];
         if (!imu["g_norm"].empty()) out.imu_params.g_norm = (double)imu["g_norm"];
         if (!imu["td"].empty())     out.imu_params.td     = (double)imu["td"];
-        if (!imu["init"].empty())   out.imu_params.init   = (std::string)imu["init"];
+        if (!imu["init"].empty())   out.imu_params.init   = readStr(imu["init"]);
         if (!imu["gyro_rot_sigma"].empty()) out.imu_params.gyro_rot_sigma = (double)imu["gyro_rot_sigma"];
 
         // IMU-camera extrinsic: R_cam_imu = rotation(body_T_cam0)^T, so IMU-frame
@@ -149,6 +192,7 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
         readI("min_smart_factors",          lp.min_smart_factors);
         readD("max_correction_translation", lp.max_correction_translation);
         readD("max_correction_rotation_deg",lp.max_correction_rotation_deg);
+        if (!lba_node["synchronous"].empty()) lp.synchronous = (int)lba_node["synchronous"] != 0;
     }
 
     // System (threads + backend + verbose)
@@ -158,7 +202,7 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
             out.num_threads = (int)sys_node["num_threads"];
         }
         if (!sys_node["backend"].empty()) {
-            std::string s = (std::string)sys_node["backend"];
+            std::string s = readStr(sys_node["backend"]);
             if (s == "CUDA")        out.backend = ComputeBackend::CUDA;
             else if (s == "OPENCL") out.backend = ComputeBackend::OPENCL;
             else                    out.backend = ComputeBackend::CPU;
@@ -194,8 +238,42 @@ bool ConfigLoader::loadKittiDataset(std::string& out_root, std::string& out_sequ
     if (!fs.isOpened()) return false;
     cv::FileNode n = fs["dataset"];
     if (n.empty()) return false;
-    out_root     = (std::string)n["root_path"];
-    out_sequence = (std::string)n["sequence"];
+    out_root     = readStr(n["root_path"]);
+    out_sequence = readStr(n["sequence"]);
+    return true;
+}
+
+bool ConfigLoader::loadImageSequenceConfig(ImageSequenceConfig& out) {
+    if (!fs.isOpened()) return false;
+    cv::FileNode n = fs["image_sequence"];
+    if (n.empty() || n["path"].empty()) return false;
+    out.path = readStr(n["path"]);
+    if (!n["times_file"].empty()) out.times_file = readStr(n["times_file"]);
+    if (!n["ground_truth_file"].empty()) out.ground_truth_file = readStr(n["ground_truth_file"]);
+    if (!n["altimeter_scale"].empty()) out.altimeter_scale = ((int)n["altimeter_scale"] != 0);
+    if (!n["start_time"].empty()) out.start_time  = (double)n["start_time"];
+    if (!n["end_time"].empty())   out.end_time    = (double)n["end_time"];
+
+    // Top-level display / GT-overlay blocks, mirroring the rosbag schema so the
+    // aligner and visualizer are configured the same way across evaluators.
+    cv::FileNode viz = fs["visualizer"];
+    if (!viz.empty() && !viz["scale"].empty()) out.viz_scale = (double)viz["scale"];
+
+    cv::FileNode al = fs["aligner"];
+    if (!al.empty() && !al["init_distance"].empty())
+        out.aligner_init_distance = (double)al["init_distance"];
+
+    cv::FileNode flip = fs["trajectory_flip"];
+    if (!flip.empty()) {
+        if (!flip["x"].empty()) out.traj_sign[0] = (double)flip["x"];
+        if (!flip["y"].empty()) out.traj_sign[1] = (double)flip["y"];
+        if (!flip["z"].empty()) out.traj_sign[2] = (double)flip["z"];
+    }
+
+    // cam0->body extrinsic (top-level opencv-matrix), same key as the rosbag
+    // schema. Left empty when absent, which the evaluator treats as identity.
+    cv::FileNode ext = fs["body_T_cam0"];
+    if (!ext.empty()) ext >> out.body_T_cam0;
     return true;
 }
 
@@ -212,11 +290,11 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     cv::FileNode n = fs["rosbag"];
     if (n.empty() || n["bag_path"].empty()) return false;
 
-    out.bag_path = (std::string)n["bag_path"];
-    if (!n["img_topic"].empty())  out.img_topic = (std::string)n["img_topic"];
-    if (!n["gps_topic"].empty())  out.gps_topic = (std::string)n["gps_topic"];
-    if (!n["imu_topic"].empty())  out.imu_topic = (std::string)n["imu_topic"];
-    if (!n["ppk_path"].empty())   out.ppk_path  = (std::string)n["ppk_path"];
+    out.bag_path = readStr(n["bag_path"]);
+    if (!n["img_topic"].empty())  out.img_topic = readStr(n["img_topic"]);
+    if (!n["gps_topic"].empty())  out.gps_topic = readStr(n["gps_topic"]);
+    if (!n["imu_topic"].empty())  out.imu_topic = readStr(n["imu_topic"]);
+    if (!n["ppk_path"].empty())   out.ppk_path  = readStr(n["ppk_path"]);
     if (!n["start_time"].empty()) out.start_time = (double)n["start_time"];
     if (!n["end_time"].empty())   out.end_time   = (double)n["end_time"];
     if (!n["altimeter_scale"].empty()) out.altimeter_scale = ((int)n["altimeter_scale"] != 0);
@@ -250,7 +328,7 @@ bool ConfigLoader::loadCameraModel(CameraModelConfig& out) {
     cv::FileNode cam = fs["camera"];
     if (cam.empty() || cam["model_type"].empty()) return false;
 
-    out.model_type = (std::string)cam["model_type"];
+    out.model_type = readStr(cam["model_type"]);
     if (!cam["scale_factor"].empty()) out.scale_factor = (double)cam["scale_factor"];
     if (!cam["image_width"].empty())  out.image_width  = (int)cam["image_width"];
     if (!cam["image_height"].empty()) out.image_height = (int)cam["image_height"];

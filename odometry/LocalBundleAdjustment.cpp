@@ -31,6 +31,7 @@ LocalBundleAdjustment::LocalBundleAdjustment(const cv::Mat& K, const LBAParams& 
 LocalBundleAdjustment::~LocalBundleAdjustment() { stop(); }
 
 void LocalBundleAdjustment::start() {
+    if (params_.synchronous) return;   // inline path; no worker thread
     if (!is_running_) {
         is_running_ = true;
         ba_thread_ = std::thread(&LocalBundleAdjustment::optimizationLoop, this);
@@ -46,9 +47,37 @@ void LocalBundleAdjustment::stop() {
 }
 
 void LocalBundleAdjustment::pushFrame(const BAFrame& frame) {
+    if (params_.synchronous) {
+        // Optimise inline on the caller's thread: by the time the pipeline polls
+        // getCorrection() right after, the correction for this exact keyframe is
+        // already published, so it is applied at zero latency (deterministic).
+        processFrameSync(frame);
+        return;
+    }
     std::lock_guard<std::mutex> lock(queue_mutex_);
     pending_frames_.push(frame);
     cv_.notify_one();
+}
+
+void LocalBundleAdjustment::processFrameSync(BAFrame frame) {
+    assignTrackIDs(frame);
+
+    {
+        std::lock_guard<std::mutex> lock(window_mutex_);
+        local_window_.push_back(frame);
+        frames_since_last_opt_++;
+
+        if (local_window_.size() > static_cast<size_t>(params_.window_size)) {
+            pruneOutdatedTracks(local_window_.front());
+            local_window_.erase(local_window_.begin());
+        }
+    }
+
+    if (local_window_.size() == static_cast<size_t>(params_.window_size) &&
+        frames_since_last_opt_ >= params_.opt_stride) {
+        runOptimization();
+        frames_since_last_opt_ = 0;
+    }
 }
 
 void LocalBundleAdjustment::optimizationLoop() {
@@ -62,25 +91,7 @@ void LocalBundleAdjustment::optimizationLoop() {
             current_frame = pending_frames_.front();
             pending_frames_.pop();
         }
-
-        assignTrackIDs(current_frame);
-
-        {
-            std::lock_guard<std::mutex> lock(window_mutex_);
-            local_window_.push_back(current_frame);
-            frames_since_last_opt_++;
-
-            if (local_window_.size() > static_cast<size_t>(params_.window_size)) {
-                pruneOutdatedTracks(local_window_.front());
-                local_window_.erase(local_window_.begin());
-            }
-        }
-
-        if (local_window_.size() == static_cast<size_t>(params_.window_size) &&
-            frames_since_last_opt_ >= params_.opt_stride) {
-            runOptimization();
-            frames_since_last_opt_ = 0;
-        }
+        processFrameSync(current_frame);
     }
 }
 

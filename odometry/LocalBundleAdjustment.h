@@ -67,6 +67,9 @@ public:
 private:
     void optimizationLoop();
     void runOptimization();
+    // Process one frame inline (assign tracks, slide the window, optimise if
+    // ready). Used by the synchronous path; mirrors one optimizationLoop body.
+    void processFrameSync(BAFrame frame);
 
     LBAParams params_;
     ImuParams imu_params_;

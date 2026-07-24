@@ -113,6 +113,14 @@ struct LBAParams {
     int min_smart_factors = 50;
     double max_correction_translation = 0.5;  // m
     double max_correction_rotation_deg = 5.0;
+
+    // Run the optimisation inline on the caller's thread (deterministic: the
+    // correction is computed and applied at the same keyframe it was triggered,
+    // so there is no async latency / race and the lever arm shrinks to ~0).
+    // Default false keeps the background-thread path for real-time targets,
+    // where a synchronous solve would stall the frontend. Set 1 for reproducible
+    // offline evaluation.
+    bool synchronous = false;
 };
 
 struct OpticalFlowParams {
@@ -134,6 +142,11 @@ struct OdometryConfig {
     std::string pose_estimator_type = "Essential";   // "Essential" | "Homography"
     std::string frontend_type = "descriptor";        // "descriptor" | "optical_flow"
     OpticalFlowParams optical_flow_params;
+
+    // "AirSim" (default, reads metric scale from GT) | "Unit" (no GT source;
+    // fixed unitless step per keyframe, see UnitScaleEstimator).
+    std::string scale_estimator_type = "AirSim";
+    double scale_estimator_unit_step = 1.0;
 
     // Keyframing caps. The frontend anchor is held while parallax accumulates;
     // a keyframe is forced (to keep matching alive) once matches drop below

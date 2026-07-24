@@ -56,7 +56,7 @@ body_T_cam0: !!opencv-matrix
 
 camera:
   model_type: "KannalaBrandtCamera"
-  scale_factor: 0.5
+  scale_factor: 1
   image_width: 1440
   image_height: 1080
   k2: -0.0764245

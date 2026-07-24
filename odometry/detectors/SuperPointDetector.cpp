@@ -1,6 +1,7 @@
 #include "SuperPointDetector.h"
 #include "../utils/FeatureUtils.h"
 #include <iostream>
+#include <filesystem>
 #include <opencv2/imgproc.hpp>
 
 SuperPointDetector::SuperPointDetector(const OdometryConfig& cfg) 
@@ -15,6 +16,15 @@ void SuperPointDetector::initializeSession() {
     session_options.SetIntraOpNumThreads(config.num_threads);
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     session_options.SetLogSeverityLevel(3);
+    // The dynamic-shape ScatterND lowering used by remove_borders (see the
+    // node_ScatterND_* nodes) appears to trip over ORT's cross-call memory
+    // arena/pattern reuse: observed in practice as a perfectly alternating
+    // pass/fail pattern once one Run() call's keypoint count differs enough
+    // from a cached buffer plan sized by an earlier call. Disabling both
+    // forces a fresh allocation per Run() instead of reusing a plan/arena
+    // sized for a different shape.
+    session_options.DisableMemPattern();
+    session_options.DisableCpuMemArena();
 
     // Hardware cascade: CUDA -> CPU. ONNX Runtime has no native OpenCL EP,
     // so OPENCL collapses straight to CPU.
@@ -46,13 +56,29 @@ void SuperPointDetector::initializeSession() {
         std::cout << "[SuperPoint] Backend: CPU Execution Provider." << std::endl;
     }
 
+    // Model path is resolved against the process CWD; the binary expects
+    // a "models/" directory next to it (build/models/superpoint.onnx).
+    // Declared outside the try so the handler can report it.
+    const std::string model_path = "models/superpoint.onnx";
     try {
-        // Model path is resolved against the process CWD; the binary expects
-        // a "models/" directory next to it (build/models/superpoint.onnx).
-        std::string model_path = "models/superpoint.onnx";
         session = std::make_unique<Ort::Session>(*env, model_path.c_str(), session_options);
     } catch (const Ort::Exception& e) {
-        std::cerr << "[SuperPoint] CRITICAL ERROR: Could not load models/superpoint.onnx" << std::endl;
+        // Session construction fails for two very different reasons: the model
+        // file is genuinely missing, or the execution provider (CUDA) failed to
+        // initialise. Reporting only the path sends you hunting for a file that
+        // is sitting right there, so distinguish the two and always surface
+        // ORT's own message.
+        const bool missing = !std::filesystem::exists(model_path);
+        std::cerr << "[SuperPoint] CRITICAL ERROR: Ort::Session failed for '" << model_path << "'.\n";
+        if (missing) {
+            std::cerr << "  The file does not exist relative to the CWD ("
+                      << std::filesystem::current_path().string() << ").\n"
+                         "  Model paths resolve against the process CWD -- run from build/.\n";
+        } else {
+            std::cerr << "  The model file EXISTS, so this is an execution-provider failure,\n"
+                         "  not a missing model. If backend: CUDA, retry with backend: CPU.\n";
+        }
+        std::cerr << "  ONNX Runtime says: " << e.what() << std::endl;
         throw;
     }
 }
@@ -118,6 +144,13 @@ void SuperPointDetector::detect(DeviceBuffer& image, std::vector<cv::KeyPoint>& 
         }
     } catch (const Ort::Exception& e) {
         std::cerr << "[SuperPoint] Inference Error: " << e.what() << std::endl;
+        // A kernel failure mid-Run() can leave the session's internal
+        // execution state (arena buffers, cached intermediates) corrupted:
+        // observed in practice as every subsequent frame reproducing the
+        // exact same error regardless of content, permanently, until the
+        // process restarts. Drop the session so the next detect() call
+        // lazily rebuilds a fresh one instead of reusing a wedged one.
+        session.reset();
         return;
     }
 

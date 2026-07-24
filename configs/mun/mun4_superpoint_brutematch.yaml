@@ -21,13 +21,13 @@ matcher:
   distance_ratio: 0.75
 
 bucketing:
-  enabled: 1
+  enabled: 0
   grid_cols: 8
   grid_rows: 6
   max_features_per_bucket: 30
 
 local_bundle_adjustment:
-  enabled: 1
+  enabled: 0
   window_size: 10
   opt_stride: 2
   anchor_prior_sigma: 1e-4

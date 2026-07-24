@@ -47,14 +47,18 @@ int main(int argc, char** argv) {
     cv::utils::logging::setLogLevel(cv::utils::logging::LOG_LEVEL_SILENT);
 
     std::string yaml_file;
+    std::string out_path = "kitti_trajectory.csv";
     bool cli_debug = false;
+    bool no_gui = false;
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--debug") cli_debug = true;
+        else if (arg == "--no-gui") no_gui = true;
+        else if (arg == "--out" && i + 1 < argc) out_path = argv[++i];
         else if (yaml_file.empty()) yaml_file = arg;
     }
     if (yaml_file.empty()) {
-        std::cerr << "Usage: ./KittiEvaluator <yaml_config_path> [--debug]\n";
+        std::cerr << "Usage: ./KittiEvaluator <yaml_config_path> [--debug] [--no-gui] [--out <csv>]\n";
         return -1;
     }
 
@@ -96,7 +100,7 @@ int main(int argc, char** argv) {
 
     auto pipeline = OdometryPipeline::build(config);
 
-    std::ofstream log_file("kitti_trajectory.csv");
+    std::ofstream log_file(out_path);
     log_file << "Frame,Pred_X,Pred_Y,Pred_Z,Q_X,Q_Y,Q_Z,Q_W\n";
 
     int frame_id = 0;
@@ -137,7 +141,7 @@ int main(int argc, char** argv) {
             // Push the latest estimate and GT into the 2D plot.
             cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
             cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
-            cv::imshow("KITTI 2D Trajectory", traj_img);
+            if (!no_gui) cv::imshow("KITTI 2D Trajectory", traj_img);
         }
 
         const PipelineMetrics& m = pipeline->getMetrics();
@@ -151,10 +155,12 @@ int main(int argc, char** argv) {
                m.fps);
         fflush(stdout);
 
-        cv::Mat vis = pipeline->getDebugFrame();
-        if (!vis.empty()) {
-            cv::imshow("KITTI VO Feature Tracking", vis);
-            if (cv::waitKey(1) == 27) break;
+        if (!no_gui) {
+            cv::Mat vis = pipeline->getDebugFrame();
+            if (!vis.empty()) {
+                cv::imshow("KITTI VO Feature Tracking", vis);
+                if (cv::waitKey(1) == 27) break;
+            }
         }
 
         frame_id++;
@@ -163,6 +169,6 @@ int main(int argc, char** argv) {
     printf("\n");
 	
     log_file.close();
-    std::cout << "\n[EVALUATOR] Complete. Trajectory saved to kitti_trajectory.csv\n";
+    std::cout << "\n[EVALUATOR] Complete. Trajectory saved to " << out_path << "\n";
     return 0;
 }

@@ -46,9 +46,36 @@ void prependEnvPath(const char* var, const std::string& dir) {
     setenv(var, updated.c_str(), /*overwrite=*/1);
 }
 
-// cuDNN 8 sub-module order: ops_infer is the base; cnn_infer/adv_infer build
-// on it; cudnn.so itself is the umbrella that lazily resolves all of them.
+// Order matters: each entry must come after whatever it depends on (ldd
+// confirms these via `NEEDED` entries), so an eager dlopen never fails
+// looking for a not-yet-mapped sibling.
+//
+// cudart/cublasLt/cublas/cufft: the actual installed ONNX Runtime CUDA EP
+// here is a CUDA-12 build (see CudaPreload.h), and needs these from
+// cuda12_libs/ specifically -- cublas depends on cublasLt, the rest are
+// independent.
+//
+// cuDNN 9 sub-module order: graph is the base (everything else needs it);
+// ops also needs graph; cnn/adv/heuristic/engines_* need graph (cnn/adv
+// also need ops); cudnn.so itself is the umbrella that lazily resolves the
+// rest by name.
 const char* kPreloadOrder[] = {
+    "libcudart.so.12",
+    "libcublasLt.so.12",
+    "libcublas.so.12",
+    "libcufft.so.11",
+
+    "libcudnn_graph.so.9",
+    "libcudnn_ops.so.9",
+    "libcudnn_cnn.so.9",
+    "libcudnn_adv.so.9",
+    "libcudnn_heuristic.so.9",
+    "libcudnn_engines_precompiled.so.9",
+    "libcudnn_engines_runtime_compiled.so.9",
+    "libcudnn.so.9",
+
+    // cuDNN 8 family: kept for any other CPU/cudnn8-only consumer; harmless
+    // if unused by the CUDA-12 provider above.
     "libcudnn_ops_infer.so.8",
     "libcudnn_cnn_infer.so.8",
     "libcudnn_adv_infer.so.8",

@@ -1,4 +1,5 @@
 #include "ORBDetector.h"
+#include "../utils/FeatureUtils.h"
 #include <iostream>
 #include <opencv2/imgproc.hpp>
 
@@ -22,17 +23,26 @@ ORBDetector::ORBDetector(const OdometryConfig& cfg) : config(cfg) {
         return p.count(key) ? p.at(key) : def;
     };
 
-    int   num_features    = getI("nfeatures",      500);
-    float scale_factor    = getF("scale_factor",   1.2f);
-    int   nlevels         = getI("nlevels",        8);
-    int   edge_threshold  = getI("edge_threshold", 31);
-    int   first_level     = getI("first_level",    0);
-    int   wta_k           = getI("wta_k",          2);
-    int   patch_size      = getI("patch_size",     31);
-    int   fast_threshold  = getI("fast_threshold", 20);
+    num_features   = getI("nfeatures",      500);
+    scale_factor   = getF("scale_factor",   1.2f);
+    nlevels        = getI("nlevels",        8);
+    edge_threshold = getI("edge_threshold", 31);
+    first_level    = getI("first_level",    0);
+    wta_k          = getI("wta_k",          2);
+    patch_size     = getI("patch_size",     31);
+    fast_threshold = getI("fast_threshold", 20);
+
+    std::cout << "[ORBDetector] nfeatures=" << num_features
+              << " scaleFactor=" << scale_factor
+              << " nLevels=" << nlevels
+              << " edgeThreshold=" << edge_threshold
+              << " firstLevel=" << first_level
+              << " WTA_K=" << wta_k
+              << " patchSize=" << patch_size
+              << " fastThreshold=" << fast_threshold << std::endl;
 
     // CPU/OpenCL object is always built; it is the fallback target of the
-    // CUDA -> OpenCL -> CPU cascade.
+    // CUDA -> OpenCL -> CPU cascade, and the whole-image (non-bucketed) path.
     orb_cpu = cv::ORB::create(num_features, scale_factor, nlevels,
                               edge_threshold, first_level, wta_k,
                               cv::ORB::HARRIS_SCORE, patch_size, fast_threshold);
@@ -47,11 +57,26 @@ ORBDetector::ORBDetector(const OdometryConfig& cfg) : config(cfg) {
 #endif
 }
 
-void ORBDetector::detect(DeviceBuffer& image, 
-                         std::vector<cv::KeyPoint>& out_keypoints, 
+void ORBDetector::detect(DeviceBuffer& image,
+                         std::vector<cv::KeyPoint>& out_keypoints,
                          DeviceBuffer& out_descriptors) {
-    
-    switch (config.backend) {
+
+    // Hardware cascade: CUDA -> OpenCL -> CPU.
+    ComputeBackend target_backend = config.backend;
+
+    // Bucketing override: per-tile ORB runs in CPU threads (see the CPU
+    // branch below), same reasoning as SIFTDetector -- round-tripping tiles
+    // to a GPU would dominate compute time.
+    if (config.bucketing_params.enabled && target_backend != ComputeBackend::CPU) {
+        static bool warned_bucketing = false;
+        if (!warned_bucketing) {
+            std::cerr << "[ORBDetector] True spatial bucketing requested. Bypassing GPU to prevent PCIe bottlenecks. Forcing CPU Multithreading..." << std::endl;
+            warned_bucketing = true;
+        }
+        target_backend = ComputeBackend::CPU;
+    }
+
+    switch (target_backend) {
 
         case ComputeBackend::CUDA: {
 #ifdef HAS_CUDA
@@ -115,7 +140,24 @@ void ORBDetector::detect(DeviceBuffer& image,
             }
 
             cv::Mat cpu_descriptors;
-            orb_cpu->detectAndCompute(gray_img, cv::noArray(), out_keypoints, cpu_descriptors);
+
+            if (config.bucketing_params.enabled) {
+                // Per-tile ORB, same mechanism SIFTDetector uses: each grid
+                // cell is detected independently and capped at
+                // max_features_per_bucket, so a low-texture cell's real (but
+                // globally-outranked) corners survive instead of losing to a
+                // high-contrast cell in a single whole-image top-nfeatures
+                // selection.
+                auto builder = [this]() {
+                    return cv::ORB::create(num_features, scale_factor, nlevels,
+                                            edge_threshold, first_level, wta_k,
+                                            cv::ORB::HARRIS_SCORE, patch_size, fast_threshold);
+                };
+                FeatureUtils::detectWithGridCPU(builder, gray_img, out_keypoints, cpu_descriptors,
+                                                 config.bucketing_params, config.num_threads);
+            } else {
+                orb_cpu->detectAndCompute(gray_img, cv::noArray(), out_keypoints, cpu_descriptors);
+            }
 
             out_descriptors = DeviceBuffer(cpu_descriptors);
             break;
