@@ -159,6 +159,16 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
                                              : UndistortMode::Image;
     }
 
+    cv::FileNode orj = fs["outlier_rejection"];
+    if (!orj.empty()) {
+        OutlierRejectionParams& o = out.outlier_rejection;
+        if (!orj["method"].empty())       o.method       = readStr(orj["method"]);
+        if (!orj["usac"].empty())         o.usac         = readStr(orj["usac"]);
+        if (!orj["threshold_px"].empty()) o.threshold_px = (double)orj["threshold_px"];
+        if (!orj["confidence"].empty())   o.confidence   = (double)orj["confidence"];
+        if (!orj["min_points"].empty())   o.min_points   = (int)orj["min_points"];
+    }
+
     cv::FileNode cam_node = fs["camera"];
     if (cam_node.empty()) {
         cam_node = fs["airsim"]["intrinsics"];

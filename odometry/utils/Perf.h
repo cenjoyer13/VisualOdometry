@@ -33,6 +33,7 @@ enum Stage {
     Undistort,     // ICameraModel::undistortImage
     Gt,            // PPK interpolation + ENU conversion
     Frontend,      // IFrontend::process + promoteKeyframe
+    Reject,        // two-view geometric outlier rejection
     Backend,       // VinsBackend::addFrame, i.e. VINS solve
     Imu,           // OdometryPipeline::addImu fan-out
     Log,           // trajectory CSV + RunLog writes

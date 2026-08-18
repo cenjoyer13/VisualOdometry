@@ -9,6 +9,7 @@
 #include "frontend/IFrontend.h"
 #include "vins/VinsBackend.h"
 #include "camera/ICameraModel.h"
+#include "frontend/OutlierRejector.h"
 
 // Frontend + VINS backend.
 //
@@ -79,8 +80,18 @@ private:
     std::unique_ptr<VinsBackend> backend_;
     const ICameraModel* camera_ = nullptr;
 
-    // Scratch for the pixel -> bearing conversion, reused across frames.
-    std::vector<cv::Point2d> norm_;
+    OutlierRejector rejector_;
+
+    // Scratch, reused across frames. norm_ is the current view's bearings,
+    // norm_prev_ the same features one frame earlier -- the pair the geometric
+    // check needs.
+    std::vector<cv::Point2d> norm_, norm_prev_;
+    std::vector<unsigned char> inlier_mask_;
+    std::vector<int64_t> dropped_ids_;
+
+    // Maps the pixels the frontend saw onto bearings, honouring undistort_mode.
+    void liftPixels(const std::vector<cv::Point2f>& px,
+                    std::vector<cv::Point2d>& out) const;
 
     bool is_first_frame = true;
     bool warned_no_track_ids_ = false;

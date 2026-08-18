@@ -7,7 +7,7 @@
 namespace perf {
 const char* const kStageNames[kNumStages] = {
     "bag_read", "decode", "undistort", "gt", "frontend",
-    "backend", "imu", "log", "gui", "total"
+    "reject", "backend", "imu", "log", "gui", "total"
 };
 }  // namespace perf
 

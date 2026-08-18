@@ -34,4 +34,11 @@ public:
 
     // Promote the frame just processed to the new keyframe anchor.
     virtual void promoteKeyframe(DeviceBuffer& frame) = 0;
+
+    // Retire tracks the pipeline's geometric check rejected. Default no-op,
+    // which is correct for any frontend that rebuilds its correspondences from
+    // scratch each frame (descriptor matching). A tracking frontend must
+    // implement it: otherwise a bad track survives, gets re-rejected every
+    // frame, and permanently occupies one of the max_corners slots.
+    virtual void dropTracks(const std::vector<int64_t>& /*ids*/) {}
 };

@@ -168,3 +168,17 @@ void OpticalFlowFrontend::promoteKeyframe(DeviceBuffer& /*frame*/) {
         addCorners(prev_gray_, mask);
     }
 }
+
+void OpticalFlowFrontend::dropTracks(const std::vector<int64_t>& ids) {
+    if (ids.empty() || tracks_.empty()) return;
+    // ids come from the pipeline's geometric check, which sees only a subset of
+    // a frame's tracks; a linear scan over a sorted copy keeps this O(n log n)
+    // without assuming the caller sorted anything.
+    std::vector<int64_t> doomed(ids);
+    std::sort(doomed.begin(), doomed.end());
+    tracks_.erase(std::remove_if(tracks_.begin(), tracks_.end(),
+                      [&](const Track& t) {
+                          return std::binary_search(doomed.begin(), doomed.end(), t.id);
+                      }),
+                  tracks_.end());
+}

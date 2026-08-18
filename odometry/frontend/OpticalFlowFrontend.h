@@ -16,6 +16,7 @@ public:
     void initialize(DeviceBuffer& frame) override;
     FrontendResult process(DeviceBuffer& frame) override;
     void promoteKeyframe(DeviceBuffer& frame) override;
+    void dropTracks(const std::vector<int64_t>& ids) override;
 
 private:
     struct Track {

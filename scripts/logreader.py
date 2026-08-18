@@ -183,7 +183,7 @@ def health(meta, by):
     if "total_mean" in meta and meta["total_mean"] > 0:
         tot = meta["total_mean"]
         stages = ["bag_read", "decode", "undistort", "gt", "frontend",
-                  "backend", "imu", "log", "gui"]
+                  "reject", "backend", "imu", "log", "gui"]
         acc = sum(meta.get(f"{st}_mean", 0.0) for st in stages)
         top = max(stages, key=lambda st: meta.get(f"{st}_mean", 0.0))
         out.append(("OK", "perf hotspot",
@@ -243,7 +243,7 @@ def cmd_summary(args):
 
     # -- perf breakdown, ranked by share of the loop --------------------
     stages = ["bag_read", "decode", "undistort", "gt", "frontend",
-              "backend", "imu", "log", "gui"]
+              "reject", "backend", "imu", "log", "gui"]
     recs = by.get("perf", [])
     if "total_mean" in meta and recs:
         tot = meta["total_mean"]

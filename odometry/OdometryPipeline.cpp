@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "frontend/FrontendFactory.h"
+#include "utils/RunLog.h"
 #include "utils/Perf.h"
 
 std::unique_ptr<OdometryPipeline> OdometryPipeline::build(const OdometryConfig& config,
@@ -25,7 +26,8 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
     : config(cfg),
       frontend(std::move(f)),
       backend_(std::move(b)),
-      camera_(camera)
+      camera_(camera),
+      rejector_(cfg.outlier_rejection)
 {
     std::cout << "[OdometryPipeline] Frontend + VINS backend assembled ("
               << (config.undistort_mode == UndistortMode::Points
@@ -83,23 +85,50 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
         return;
     }
 
-    // Pixels -> bearings. The two undistort modes differ here and nowhere else:
-    //   Points -- the frontend saw the RAW frame, so the full lens model has to
-    //             be inverted per feature (ICameraModel::liftProjective).
-    //   Image  -- the evaluator already rectified the frame, so the mapping is
-    //             the plain pinhole normalisation against the rectified
-    //             intrinsics. Calling liftProjective here would undistort a
-    //             second time.
-    if (config.undistort_mode == UndistortMode::Points) {
+    {
         PERF_SCOPE(perf::Undistort);
-        camera_->liftProjective(fr.points2D, norm_);
-    } else {
-        const CameraIntrinsics& K = config.intrinsics;
-        norm_.resize(fr.points2D.size());
-        for (size_t i = 0; i < fr.points2D.size(); ++i) {
-            norm_[i].x = (static_cast<double>(fr.points2D[i].x) - K.cx) / K.fx;
-            norm_[i].y = (static_cast<double>(fr.points2D[i].y) - K.cy) / K.fy;
+        liftPixels(fr.points2D, norm_);
+    }
+
+    // Geometric outlier rejection, on bearings rather than pixels -- see
+    // OutlierRejector. Requires the correspondence pair, so the previous view's
+    // matching features are lifted too.
+    //
+    // Only runs when the frontend's four output arrays are index-aligned, which
+    // is what the backend consumes. Optical flow satisfies that (every live
+    // track is a correspondence); the descriptor frontend does not yet
+    // (points2D is every keypoint, pts_curr only the matched ones), so it is
+    // skipped there rather than silently filtering the wrong indices.
+    if (rejector_.enabled() &&
+        fr.pts_prev.size() == fr.points2D.size() &&
+        fr.pts_curr.size() == fr.points2D.size()) {
+        PERF_SCOPE(perf::Reject);
+        liftPixels(fr.pts_prev, norm_prev_);
+        const auto res = rejector_.run(norm_prev_, norm_, inlier_mask_);
+
+        if (res.ran) {
+            dropped_ids_.clear();
+            size_t k = 0;
+            for (size_t i = 0; i < inlier_mask_.size(); ++i) {
+                if (inlier_mask_[i]) {
+                    fr.track_ids[k] = fr.track_ids[i];
+                    fr.points2D[k]  = fr.points2D[i];
+                    norm_[k]        = norm_[i];
+                    ++k;
+                } else {
+                    dropped_ids_.push_back(fr.track_ids[i]);
+                }
+            }
+            fr.track_ids.resize(k);
+            fr.points2D.resize(k);
+            norm_.resize(k);
+            // Retire them in the frontend too, or a bad track survives and is
+            // re-rejected every frame while holding a max_corners slot.
+            frontend->dropTracks(dropped_ids_);
         }
+
+        LogRec("reject")("ran", res.ran)("n_in", res.n_in)("n_out", res.n_out)
+                        ("skip", res.skip_reason);
     }
 
     const auto t0 = std::chrono::high_resolution_clock::now();
@@ -121,6 +150,26 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
     const auto t_end = std::chrono::high_resolution_clock::now();
     metrics.time_total_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
     metrics.fps = metrics.time_total_ms > 0.0 ? 1000.0 / metrics.time_total_ms : 0.0;
+}
+
+void OdometryPipeline::liftPixels(const std::vector<cv::Point2f>& px,
+                                  std::vector<cv::Point2d>& out) const {
+    // The two undistort modes differ here and nowhere else:
+    //   Points -- the frontend saw the RAW frame, so the full lens model has to
+    //             be inverted per feature.
+    //   Image  -- the evaluator already rectified the frame, so the mapping is
+    //             the plain pinhole normalisation against the rectified
+    //             intrinsics. Calling liftProjective here would undistort twice.
+    if (config.undistort_mode == UndistortMode::Points) {
+        camera_->liftProjective(px, out);
+        return;
+    }
+    const CameraIntrinsics& K = config.intrinsics;
+    out.resize(px.size());
+    for (size_t i = 0; i < px.size(); ++i) {
+        out[i].x = (static_cast<double>(px[i].x) - K.cx) / K.fx;
+        out[i].y = (static_cast<double>(px[i].y) - K.cy) / K.fy;
+    }
 }
 
 cv::Mat OdometryPipeline::getGlobalTransformVO() const {

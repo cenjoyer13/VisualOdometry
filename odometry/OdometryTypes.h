@@ -73,6 +73,8 @@ enum class UndistortMode {
     Points   // frontend sees the raw frame, only feature pixels are lifted
 };
 
+#include "frontend/OutlierRejector.h"
+
 struct BucketingConfig {
     bool enabled = false;
     int grid_cols = 10;
@@ -124,6 +126,8 @@ struct OdometryConfig {
 
 
     UndistortMode undistort_mode = UndistortMode::Image;
+
+    OutlierRejectionParams outlier_rejection;
 
     BucketingConfig bucketing_params;
 

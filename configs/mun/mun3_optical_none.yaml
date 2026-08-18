@@ -1,0 +1,96 @@
+%YAML:1.0
+
+# Backend configuration: camera-IMU extrinsic, IMU noise densities, td and the
+# solver limits all live in the VINS yaml, which is the single source of truth
+# for anything the estimator consumes. Path is relative to the process CWD
+# (run from build/).
+vins_config: ../configs/vins/mun3_nadir.yaml
+
+# Structured run log -> <dir>/run.jsonl, read with scripts/logreader.py.
+# level: off | info | debug | trace. frame_stride thins per-frame records only
+# (run.meta and VINS diagnostics are never dropped).
+logging:
+  dir: ../results/mun3_none
+  level: info
+  frame_stride: 1
+  perf_report_every: 500
+
+visualizer:
+    scale: 0.2      # px-per-metre zoom of the 2D trajectory window
+
+rosbag:
+  bag_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3.bag
+  ppk_path: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3_frl.pos
+  img_topic: /camera/image_mono
+  gps_topic: /fix
+  imu_topic: /imu/data
+  # From the very start of the bag. The old 30 s offset existed to match the
+  # evaluation window the ORB-SLAM3 / old-VO-pipeline numbers were computed
+  # over, but it drops the estimator straight into steady cruise -- the worst
+  # case for VINS's initialiser, which needs accelerometer excitation before
+  # scale and gravity become observable. The takeoff transient at the head of
+  # the bag is exactly that excitation.
+  start_time: 0.0
+  end_time: 300.0
+
+frontend: optical_flow
+# Matched to VINS's own feature tracker (max_cnt 150, min_dist 30). The backend
+# is tuned for that density: at the previous 1000 corners with 8x6 bucketing the
+# frontend was handing it ~1500 features per frame, ~10x its design point, which
+# blew the per-frame solve out to ~300 ms and gave Ceres a far larger problem
+# than its solver-time budget assumes.
+optical_flow:
+  max_corners: 150
+  min_distance: 30.0
+  win_size: 21
+  fb_error_threshold: 1.0
+
+# Off, because VINS does not bucket: it enforces spatial spread through
+# min_distance masking instead, and stacking both starves the replenish cap.
+bucketing:
+  enabled: 0
+  grid_cols: 8
+  grid_rows: 6
+  max_features_per_bucket: 30
+
+body_T_cam0: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+  data: [-0.01039363,  0.99994595,  0.00027614, -0.27939175,
+         -0.99982944, -0.0103882,  -0.01527021,  0.00394073,
+         -0.01526652, -0.00043481,  0.99988337, -0.00039529,
+          0, 0, 0, 1]
+
+camera:
+  # Control for the points-vs-image comparison. mun3_optical.yaml rectifies to
+  # 720x540 while mun3_optical_points.yaml tracks on the raw 1440x1080, so a
+  # straight A/B confounds the undistortion method with a 4x change in working
+  # resolution (KLT's win_size and min_distance are in pixels, so their angular
+  # meaning changes too). This rectifies at full resolution: same pixel scale as
+  # points mode, so what remains is the field of view and the resampling.
+  model_type: "KannalaBrandtCamera"
+  scale_factor: 1.0
+  image_width: 1440
+  image_height: 1080
+  k2: -0.0764245
+  k3:  0.0322856
+  k4: -0.0445168
+  k5:  0.0163317
+  mu:  829.224
+  mv:  829.454
+  u0:  833.937
+  v0:  562.509
+
+system:
+  backend: CPU
+  num_threads: 12
+  verbose: 0
+
+
+aligner:
+  init_distance: 10.0   # GT travel (m) before the VO->GT yaw is solved
+
+keyframe:
+  min_matches: 12
+  max_skip: 40
