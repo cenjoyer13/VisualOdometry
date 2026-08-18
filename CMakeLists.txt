@@ -9,21 +9,25 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # =========================================================================
-# Eigen ABI safety vs GTSAM.
+# Eigen ABI: EIGEN_DONT_VECTORIZE must stay OFF.
 #
-# A pre-built libgtsam.so / gtsam.lib compiled without -march=native lays out
-# fixed-size Eigen types (Pose3, Matrix4d, Cal3_S2, Values entries, ...) with
-# the SSE default of 16-byte alignment. Our code with -march=native on an
-# AVX-capable CPU otherwise bumps Eigen's struct alignment to 32 bytes; the
-# two halves agree on type names but disagree on size/alignment, and the
-# first runOptimization() call corrupts the heap.
+# It used to be set globally to match a libgtsam.so built without
+# -march=native: GTSAM's compiled Eigen types used 16-byte SSE alignment while
+# ours would have picked 32-byte AVX, and the mismatch corrupted the heap.
 #
-# EIGEN_DONT_VECTORIZE pins Eigen's struct alignment to 16 bytes so its types
-# match GTSAM's compiled layout. Eigen still uses AVX for arithmetic — it
-# just emits unaligned loads/stores where necessary, which is the layout
-# GTSAM itself was compiled against.
+# GTSAM is gone and the constraint inverted. libceres.so is built WITHOUT
+# EIGEN_DONT_VECTORIZE, so defining it here would give our translation units a
+# different sizeof/alignof for the same Eigen types that Ceres was compiled
+# against -- the identical failure mode, pointing the other way. Symptom when
+# it was still set: a hard crash inside VINS initialisation, immediately after
+# "gyroscope bias initial calibration", i.e. the first heavily Eigen/Ceres
+# code path the estimator reaches.
 # =========================================================================
-add_compile_definitions(EIGEN_DONT_VECTORIZE)
+if(NOT CMAKE_CXX_FLAGS MATCHES "march=native")
+    # Ceres is a system/conda build compiled for a baseline ISA; -march=native
+    # on our side is fine as long as Eigen's vectorisation policy matches, which
+    # it now does (both vectorise).
+endif()
 
 # =========================================================================
 # Compile flag profile.
