@@ -97,8 +97,8 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
         const CameraIntrinsics& K = config.intrinsics;
         norm_.resize(fr.points2D.size());
         for (size_t i = 0; i < fr.points2D.size(); ++i) {
-            norm_[i].x = (fr.points2D[i].x - K.cx) / K.fx;
-            norm_[i].y = (fr.points2D[i].y - K.cy) / K.fy;
+            norm_[i].x = (static_cast<double>(fr.points2D[i].x) - K.cx) / K.fx;
+            norm_[i].y = (static_cast<double>(fr.points2D[i].y) - K.cy) / K.fy;
         }
     }
 

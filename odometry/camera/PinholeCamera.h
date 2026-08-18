@@ -13,7 +13,7 @@ public:
     cv::Size outputSize() const override { return output_size_; }
     cv::Mat undistortImage(const cv::Mat& raw) const override;
     void liftProjective(const std::vector<cv::Point2f>& px,
-                        std::vector<cv::Point2f>& out) const override;
+                        std::vector<cv::Point2d>& out) const override;
 
 private:
     CameraIntrinsics intrinsics_;   // scaled, i.e. of the undistortImage output

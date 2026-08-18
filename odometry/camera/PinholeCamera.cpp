@@ -21,14 +21,14 @@ cv::Mat PinholeCamera::undistortImage(const cv::Mat& raw) const {
 }
 
 void PinholeCamera::liftProjective(const std::vector<cv::Point2f>& px,
-                                   std::vector<cv::Point2f>& out) const {
+                                   std::vector<cv::Point2d>& out) const {
     // This model carries no distortion coefficients (CameraModelConfig's k2..k5
     // are Kannala-Brandt only), so lifting is the plain pinhole inverse against
     // the RAW-pixel intrinsics -- not the scaled ones, because in Points mode
     // the frontend never saw a resized image.
     out.resize(px.size());
     for (size_t i = 0; i < px.size(); ++i) {
-        out[i].x = static_cast<float>((px[i].x - u0_) / mu_);
-        out[i].y = static_cast<float>((px[i].y - v0_) / mv_);
+        out[i].x = (static_cast<double>(px[i].x) - u0_) / mu_;
+        out[i].y = (static_cast<double>(px[i].y) - v0_) / mv_;
     }
 }

@@ -63,7 +63,7 @@ void VinsBackend::addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr) {
 
 void VinsBackend::addFrame(double t,
                            const std::vector<int64_t>& ids,
-                           const std::vector<cv::Point2f>& norm,
+                           const std::vector<cv::Point2d>& norm,
                            const std::vector<cv::Point2f>& px) {
     // Feed-rate throttle, standing in for the one we bypassed. VINS's own
     // tracker only emits a featureFrame when it is below FREQ Hz (feature_tracker

@@ -73,7 +73,7 @@ public:
     // keyframes -- VINS makes its own parallax-based keyframe decision.
     void addFrame(double t,
                   const std::vector<int64_t>& ids,
-                  const std::vector<cv::Point2f>& norm,
+                  const std::vector<cv::Point2d>& norm,
                   const std::vector<cv::Point2f>& px);
 
     // True once VINS has finished initialization and is running the nonlinear

@@ -80,7 +80,7 @@ private:
     const ICameraModel* camera_ = nullptr;
 
     // Scratch for the pixel -> bearing conversion, reused across frames.
-    std::vector<cv::Point2f> norm_;
+    std::vector<cv::Point2d> norm_;
 
     bool is_first_frame = true;
     bool warned_no_track_ids_ = false;

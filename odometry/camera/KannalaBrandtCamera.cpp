@@ -41,13 +41,18 @@ cv::Mat KannalaBrandtCamera::undistortImage(const cv::Mat& raw) const {
 }
 
 void KannalaBrandtCamera::liftProjective(const std::vector<cv::Point2f>& px,
-                                         std::vector<cv::Point2f>& out) const {
+                                         std::vector<cv::Point2d>& out) const {
     out.clear();
     if (px.empty()) return;
+    // Promote to double before the call so both the Newton iteration and its
+    // result stay in double; undistortPoints matches its output type to its
+    // input, so passing the float pixels straight through would round the
+    // bearing.
+    std::vector<cv::Point2d> in(px.begin(), px.end());
     // cv::fisheye::undistortPoints with an empty P returns normalised
     // coordinates directly: it inverts the Kannala-Brandt polynomial by Newton
     // iteration, the same computation camodocal's backprojectSymmetric does.
     // Note this consumes RAW pixels, so it must not be combined with
     // undistortImage on the same frame.
-    cv::fisheye::undistortPoints(px, out, K_, D_, cv::noArray(), cv::noArray());
+    cv::fisheye::undistortPoints(in, out, K_, D_, cv::noArray(), cv::noArray());
 }
