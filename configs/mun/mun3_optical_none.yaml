@@ -10,7 +10,7 @@ vins_config: ../configs/vins/mun3_nadir.yaml
 # level: off | info | debug | trace. frame_stride thins per-frame records only
 # (run.meta and VINS diagnostics are never dropped).
 logging:
-  dir: ../results/mun3_none
+  dir: ../results/mun3_optical_none
   level: info
   frame_stride: 1
   perf_report_every: 500

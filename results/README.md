@@ -15,8 +15,14 @@ One folder per run, named after the config that produced it.
 
 Nothing belongs at the top level of results/ except this file.
 
-Scoring:
-  scripts/compare_frl.py results/<run>        # project scorer, no alignment
-  scripts/compare_frl.py results              # every run, one table
-  scripts/evaluate_mun3_frl.sh results/<run>/trajectory.csv   # evo, yaw-only
-  scripts/logreader.py summary results/<run>/run.jsonl
+Scoring (compare_frl needs matplotlib for --plot, so use ~/venv/bin/python):
+
+  ~/venv/bin/python scripts/compare_frl.py results --plot   # every run + graphs
+  ~/venv/bin/python scripts/compare_frl.py results/<run>    # one run
+  scripts/evaluate_mun3_frl.sh results/<run>/trajectory.csv # evo, yaw-only
+  python3 scripts/logreader.py summary results/<run>/run.jsonl
+
+compare_frl pairs VO to GT by TIMESTAMP and re-origins both at the first
+matched sample. It and the evo path use the same start-anchored convention but
+different resampling, so their absolute numbers are close but not identical --
+compare within one scorer, never across.
