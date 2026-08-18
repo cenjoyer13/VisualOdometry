@@ -244,13 +244,15 @@ def cmd_summary(args):
     # -- perf breakdown, ranked by share of the loop --------------------
     stages = ["bag_read", "decode", "undistort", "gt", "frontend",
               "backend", "imu", "log", "gui"]
-    if f"total_mean" in meta:
+    recs = by.get("perf", [])
+    if "total_mean" in meta and recs:
         tot = meta["total_mean"]
         print()
         print("=" * W)
-        print(f"PERF  ({meta.get('frames', '?')} frames, ms/frame)")
+        print(f"PERF  ({meta.get('frames', len(recs))} frames, ms/frame)")
         print("=" * W)
-        print(f"  {'stage':<12} {'mean':>8} {'p50':>8} {'p90':>8} {'max':>8}   share")
+        print(f"  {'stage':<11} {'mean':>7} {'p50':>7} {'p90':>7} {'max':>7}  share"
+              f"   {'active':>7} {'on':>6}")
         rows = [(meta.get(f"{st}_mean", 0.0), st) for st in stages]
         rows.sort(reverse=True)
         acc = 0.0
@@ -259,18 +261,36 @@ def cmd_summary(args):
                 continue
             acc += mean
             share = 100.0 * mean / tot if tot > 0 else 0.0
-            print(f"  {st:<12} {mean:8.2f} {meta.get(st+'_p50',0):8.2f} "
-                  f"{meta.get(st+'_p90',0):8.2f} {meta.get(st+'_max',0):8.2f}   {share:5.1f}%")
-        print(f"  {'-'*12} {'-'*8} {'-'*8} {'-'*8} {'-'*8}   -----")
-        print(f"  {'total':<12} {tot:8.2f} {meta.get('total_p50',0):8.2f} "
-              f"{meta.get('total_p90',0):8.2f} {meta.get('total_max',0):8.2f}   100.0%")
+            # A stage that only runs on some frames (the backend is skipped by
+            # the feed throttle; gui is off in headless runs) has a per-frame
+            # mean far below its real cost. "active" is the mean over the frames
+            # where it actually ran, and "on" is how often that was -- without
+            # them a bimodal stage reads as uniformly cheap.
+            # Threshold scales with the stage's own p90 rather than a fixed
+            # epsilon: a throttled backend frame still costs ~0.08 ms on the
+            # early-return path, which a 0.01 ms cutoff counts as "active" and
+            # which then drags the active mean down (29.7 ms over 68% of frames
+            # instead of the true 40.4 ms over 50%).
+            thresh = max(0.05, 0.05 * meta.get(f"{st}_p90", 0.0))
+            act = [r.get(st, 0.0) for r in recs if r.get(st, 0.0) > thresh]
+            amean = sum(act) / len(act) if act else 0.0
+            on = 100.0 * len(act) / len(recs) if recs else 0.0
+            bimodal = on < 95.0
+            print(f"  {st:<11} {mean:7.2f} {meta.get(st+'_p50',0):7.2f} "
+                  f"{meta.get(st+'_p90',0):7.2f} {meta.get(st+'_max',0):7.2f} "
+                  f"{share:5.1f}%   "
+                  + (f"{amean:7.2f} {on:5.0f}%" if bimodal else f"{'':>7} {'':>6}"))
+        print(f"  {'-'*11} {'-'*7} {'-'*7} {'-'*7} {'-'*7}  -----")
+        print(f"  {'total':<11} {tot:7.2f} {meta.get('total_p50',0):7.2f} "
+              f"{meta.get('total_p90',0):7.2f} {meta.get('total_max',0):7.2f}  100.0%")
         un = tot - acc
         if tot > 0 and un / tot > 0.10:
-            print(f"  {'UNATTRIBUTED':<12} {un:8.2f} {'':>8} {'':>8} {'':>8}   "
+            print(f"  {'UNATTRIBUTED':<11} {un:7.2f} {'':>7} {'':>7} {'':>7}  "
                   f"{100.0*un/tot:5.1f}%   <- loop time no stage claims")
-        wall = tot * float(meta.get("frames", 0)) / 1000.0
+        wall = tot * float(meta.get("frames", len(recs))) / 1000.0
         print(f"\n  wall clock in the loop: {wall:.0f} s "
-              f"({(meta.get('frames',0) / wall) if wall > 0 else 0:.1f} frames/s)")
+              f"({(meta.get('frames', len(recs)) / wall) if wall > 0 else 0:.1f} frames/s)")
+        print("  'active'/'on' shown only for stages that skip frames.")
 
     vins = by.get("vins", [])
     if vins:
