@@ -68,6 +68,10 @@ struct RosbagConfig {
     // never runs. Calibrate the offset once as (aligner_yaw + heading_at_t0).
     bool   heading_seed = false;
     double heading_mount_offset = 0.0;   // degrees
+    // Horizontal speed floor before the GT-displacement aligner starts
+    // accumulating. 0 keeps the historical behaviour. See TrajectoryAligner:
+    // a distance trigger alone can fit the yaw from near-hover wander.
+    double aligner_min_speed = 0.0;      // m/s
     // Structured run log (see odometry/utils/RunLog.h). Empty dir disables it.
     std::string log_dir;
     std::string log_level = "info";   // off | info | debug | trace

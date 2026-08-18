@@ -30,6 +30,7 @@
 #endif
 #include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
+#include "odometry/utils/TrajectoryAligner.h"
 #include "odometry/utils/RunLog.h"
 #include "odometry/utils/Perf.h"
 
@@ -401,13 +402,16 @@ int main(int argc, char** argv) {
     cv::Vec3f cur_position(0, 0, 0);
     cv::Mat   cur_R = cv::Mat::eye(3, 3, CV_64F);
 
-    // XY-plane auto-aligner: once GT has travelled aligner_init_distance from
-    // the first tracked frame, solve the yaw between the VO and GT displacement
-    // vectors and rotate the VO trajectory about Z by it. Identity until then.
-    cv::Mat align_T_vo = cv::Mat::eye(4, 4, CV_64F);
-    bool align_ready = false;
-    bool align_start_set = false;
-    cv::Point2d vo_start, gt_start;
+    // Yaw alignment: estimator world -> navigation frame. See
+    // odometry/utils/TrajectoryAligner.h for the two modes and why only yaw.
+    TrajectoryAligner::Params al_p;
+    al_p.mode = bag_cfg.heading_seed ? TrajectoryAligner::Mode::Heading
+                                     : TrajectoryAligner::Mode::GtDisplacement;
+    al_p.init_distance    = bag_cfg.aligner_init_distance;
+    al_p.min_speed        = bag_cfg.aligner_min_speed;
+    al_p.mount_offset_deg = bag_cfg.heading_mount_offset;
+    TrajectoryAligner aligner(al_p);
+    double prev_align_t = -1.0;
 
     // Bag-relative time bounds (ns).
     uint64_t bag_start_ns = 0;
@@ -545,68 +549,31 @@ int main(int argc, char** argv) {
             // on top.
             cv::Mat M = pipeline->getGlobalTransformVO();
 
-            // Deployment-mode heading seed. Solves the same Z rotation the GT
-            // aligner does, but from the heading at this first tracked frame:
-            //   align_yaw = mount_offset - heading(t0)
-            // Setting align_ready here means the GT aligner below never runs,
-            // and the trajectory is aligned from frame 0 rather than after the
-            // first aligner_init_distance metres of GT travel.
-            //
-            // What this buys: the GT TRAJECTORY is no longer used to orient the
-            // estimate -- only a single heading scalar at t0, which a compass or
-            // AHRS supplies in flight. `yaw` here comes from cur_R, i.e. from
-            // whatever attitude source is already driving it (the FRL .pos when
-            // ppk_path is set, otherwise the IMU's own orientation), so on this
-            // bag it is still a ground-truth-derived number -- but a scalar
-            // heading, not a position track, which is the part that matters.
-            if (bag_cfg.heading_seed && !align_ready) {
-                const double a = bag_cfg.heading_mount_offset * M_PI / 180.0 - yaw;
-                const double c = std::cos(a), sn = std::sin(a);
-                align_T_vo = (cv::Mat_<double>(4, 4) <<
-                    c, -sn, 0, 0,
-                    sn,  c, 0, 0,
-                    0,   0, 1, 0,
-                    0,   0, 0, 1);
-                align_ready = true;
-                std::cout << "\n[Heading] seeded: heading=" << yaw * 180.0 / M_PI
-                          << " deg (NED) + mount offset "
-                          << bag_cfg.heading_mount_offset << " deg -> yaw="
-                          << std::remainder(a * 180.0 / M_PI, 360.0)
-                          << " deg at frame " << frame_id << " (GT trajectory unused)\n";
-            }
-
-            // Auto-aligner: record the VO and GT start once tracking begins, and
-            // once GT has travelled aligner_init_distance, solve the yaw that
-            // rotates the VO displacement onto the GT displacement. Held after.
-            if (!align_ready) {
-                cv::Point2d p_vo(M.at<double>(0, 3), M.at<double>(1, 3));
-                cv::Point2d p_gt(current_gt.position[0], current_gt.position[1]);
-                if (!align_start_set) {
-                    vo_start = p_vo;
-                    gt_start = p_gt;
-                    align_start_set = true;
-                }
-                cv::Point2d gt_disp = p_gt - gt_start;
-                if (cv::norm(gt_disp) >= bag_cfg.aligner_init_distance) {
-                    cv::Point2d vo_disp = p_vo - vo_start;
-                    if (cv::norm(vo_disp) > 1e-6) {
-                        const double yaw = std::atan2(gt_disp.y, gt_disp.x)
-                                         - std::atan2(vo_disp.y, vo_disp.x);
-                        const double c = std::cos(yaw), s = std::sin(yaw);
-                        align_T_vo = (cv::Mat_<double>(4, 4) <<
-                            c, -s, 0, 0,
-                            s,  c, 0, 0,
-                            0,  0, 1, 0,
-                            0,  0, 0, 1);
-                        align_ready = true;
-                        std::cout << "\n[Aligner] yaw=" << yaw * 180.0 / M_PI
-                                  << " deg after " << cv::norm(gt_disp) << " m of GT travel\n";
+            // One call covers both modes; which one is active was decided
+            // by the config when the aligner was constructed.
+            {
+                const double dt = (prev_align_t > 0.0) ? (frame_time - prev_align_t) : 0.0;
+                prev_align_t = frame_time;
+                const cv::Point2d est_xy(M.at<double>(0, 3), M.at<double>(1, 3));
+                const cv::Point2d gt_xy(current_gt.position[0], current_gt.position[1]);
+                if (aligner.update(est_xy, gt_xy, yaw, dt)) {
+                    if (al_p.mode == TrajectoryAligner::Mode::Heading) {
+                        std::cout << "\n[Aligner] heading seed: heading="
+                                  << yaw * 180.0 / M_PI << " deg + mount offset "
+                                  << bag_cfg.heading_mount_offset << " deg -> yaw="
+                                  << aligner.solvedYawDeg()
+                                  << " deg at frame " << frame_id
+                                  << " (GT trajectory unused)\n";
+                    } else {
+                        std::cout << "\n[Aligner] yaw=" << aligner.solvedYawDeg()
+                                  << " deg after " << aligner.travelledAtSolve()
+                                  << " m of horizontal GT travel (frame " << frame_id << ")\n";
                     }
                 }
             }
 
             // Apply the yaw alignment outermost in the display frame.
-            cv::Mat T_world = align_T_vo * M;
+            cv::Mat T_world = aligner.transform() * M;
             float pred_x = T_world.at<double>(0, 3);
             float pred_y = T_world.at<double>(1, 3);
             float pred_z = T_world.at<double>(2, 3);

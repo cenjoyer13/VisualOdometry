@@ -259,6 +259,10 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     // rather than the data source.
     if (!fs["vins_config"].empty()) out.vins_config = readStr(fs["vins_config"]);
 
+    cv::FileNode al_node = fs["aligner"];
+    if (!al_node.empty() && !al_node["min_speed"].empty())
+        out.aligner_min_speed = (double)al_node["min_speed"];
+
     cv::FileNode hd = fs["heading"];
     if (!hd.empty()) {
         if (!hd["enabled"].empty()) out.heading_seed = ((int)hd["enabled"] != 0);
