@@ -1,346 +1,0 @@
-[CameraModelFactory] Instantiating KannalaBrandtCamera.
-[Camera] KannalaBrandtCamera -> rectified 720x540 (fx=414.612 fy=414.727 cx=416.969 cy=281.254)
-[PPK] Loaded 1541 samples from ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3_frl.pos
-[Altimeter] PPK ground level: 114.228m MSL.
-[OdometryPipeline] Initiating build sequence...
-USE_IMU: 1
-IMU_TOPIC: /imu/data
-result path ./vins_output/vio.csv
-[33m[WARN] [1787044281.969394384]:  fix extrinsic param [0m
-camera number 1
-[0m[INFO] [1787044281.969462203]: Synchronized sensors, fix time offset: -0.0297405[0m
-[0m[INFO] [1787044281.969476490]: ROW: 1080 COL: 1440 [0m
-[0m[INFO] [1787044281.969515581]: init begins[0m
- exitrinsic cam 0
- -0.0103936    0.999946  0.00027614
-  -0.999829  -0.0103882  -0.0152702
- -0.0152665 -0.00043481    0.999883
-  -0.279392  0.00394073 -0.00039529
-set g     0     0 9.803
-[0m[INFO] [1787044281.972682498]: reading paramerter of camera ../configs/vins/payload_cam_down_NRC1.yaml[0m
-MULTIPLE_THREAD is 0
-[VinsBackend] VINS estimator ready (../configs/vins/mun3_nadir.yaml), feed throttle 10 Hz
-[FrontendFactory] Instantiating OpticalFlowFrontend (Shi-Tomasi + KLT).
-[OdometryPipeline] Frontend + VINS backend assembled.
-[EVALUATOR] Starting rosbag replay: ../../../VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3.bag
-  img_topic=/camera/image_mono  gps_topic=/fix  imu_topic=/imu/data
-------------------------------------------------------
-[0000] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   0ms | FPS: 0.0   init first imu pose
-averge acc 0.470021 -0.032782 -9.601767
-init R0 
-   0.998804 0.000166929   0.0488924
-          0   -0.999994  0.00341419
-  0.0488927 -0.00341011   -0.998798
-process measurement time: 0.220276
-[0001] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:223.8   [0002] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:255.8   process measurement time: 1.124379
-[0003] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:185.2   [0004] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:294.8   process measurement time: 1.129022
-[0005] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:200.3   [0006] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:279.3   process measurement time: 1.286955
-[0007] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:196.3   [0008] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:263.4   process measurement time: 1.195261
-[0009] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:189.7   [0010] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:262.5   process measurement time: 1.139948
-[0011] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:204.3   [0012] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:304.1   process measurement time: 0.831645
-[0013] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:271.1   [0014] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:387.9   process measurement time: 0.760362
-[0015] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   3ms | FPS:307.6   [0016] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   2ms | FPS:410.5   process measurement time: 0.864540
-[0017] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:233.5   [0018] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:306.5   process measurement time: 0.870352
-[0019] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:282.6   [0020] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:356.3   [0m[INFO] [1787044283.426009291]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.426119222]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.310375
-[0021] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:250.8   [0022] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:347.4   [0m[INFO] [1787044283.450439786]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.450561612]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.277906
-[0023] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:238.9   [0024] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:87.8   [0m[INFO] [1787044283.475588022]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.475740529]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.626732
-[0025] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:188.2   [0026] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:306.4   [0m[INFO] [1787044283.502672791]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.502833993]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.609996
-[0027] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:215.6   [0028] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:364.7   [0m[INFO] [1787044283.527879630]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.527995277]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.311611
-[0029] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   4ms | FPS:245.9   [0030] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:363.2   [0m[INFO] [1787044283.552395825]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.552566005]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.727756
-[0031] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:188.2   [0032] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:293.8   [0m[INFO] [1787044283.573992851]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.574153693]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.618748
-[0033] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:193.3   [0034] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:312.4   [0m[INFO] [1787044283.602731707]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.602951648]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.661098
-[0035] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:  14ms | FPS:69.6   [0036] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.9   [0m[INFO] [1787044283.647243082]: IMU excitation not enouth![0m
-[0m[INFO] [1787044283.647361445]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.072169
-[0037] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:216.0   [0038] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.3   [0m[INFO] [1787044283.680697743]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.335404
-[0039] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:216.4   [0040] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:336.5   [0m[INFO] [1787044283.707436866]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.477202
-[0041] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:218.4   [0042] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:286.3   [0m[INFO] [1787044283.731403433]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.604606
-[0043] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:189.0   [0044] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:324.6   [0m[INFO] [1787044283.758518881]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.396719
-[0045] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  1ms | Tot:   5ms | FPS:207.4   [0046] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:285.5   [0m[INFO] [1787044283.787846516]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.541496
-[0047] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   5ms | FPS:184.1   [0048] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:281.0   [VinsBackend] frame 25  dt=0.132307s  feats=150  carried=150 (100%)
-[0m[INFO] [1787044283.811343968]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.382317
-[0049] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   4ms | FPS:226.2   [0050] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:336.3   [0m[INFO] [1787044283.835166679]: Not enough features or parallax; Move device around[0m
-process measurement time: 1.796212
-[0051] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  2ms | Tot:   6ms | FPS:177.9   [0052] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:291.0   [33m[WARN] [1787044283.890971288]: gyroscope bias initial calibration  0.00240023 -0.00472639    -0.00826[0m
-[0m[INFO] [1787044283.955584531]: Initialization finish![0m
-process measurement time: 101.710948
-[0053] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:102ms | Tot: 105ms | FPS: 9.5   [0054] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:300.8   process measurement time: 36.958558
-[0055] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  40ms | FPS:24.7   [0056] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:354.4   process measurement time: 26.506156
-[0057] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos: 27ms | Tot:  30ms | FPS:33.6   [0058] AGL:   1.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:312.3   process measurement time: 38.589829
-[0059] AGL:   1.4m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  42ms | FPS:23.7   [0060] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:262.4   process measurement time: 28.253357
-[0061] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos: 28ms | Tot:  32ms | FPS:31.6   [0062] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:308.6   process measurement time: 20.881181
-[0063] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos: 21ms | Tot:  24ms | FPS:41.2   [0064] AGL:   1.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:275.4   process measurement time: 33.568212
-[0065] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  47ms | FPS:21.4   [0066] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:71.4   process measurement time: 42.253586
-[0067] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  56ms | FPS:17.8   [0068] AGL:   1.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:72.4   process measurement time: 42.492182
-[0069] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos: 43ms | Tot:  57ms | FPS:17.7   [0070] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:70.0   process measurement time: 41.291567
-[0071] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  55ms | FPS:18.2   [0072] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:67.2   process measurement time: 23.833821
-[0073] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos: 24ms | Tot:  38ms | FPS:26.3   [0074] AGL:   1.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:65.9   process measurement time: 32.755196
-[0075] AGL:   1.8m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  47ms | FPS:21.3   [0076] AGL:   1.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:67.6   process measurement time: 31.773066
-[0077] AGL:   1.8m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  47ms | FPS:21.1   [0078] AGL:   1.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:66.7   process measurement time: 26.297798
-[0079] AGL:   1.9m | Det:   0ms | Mat:   0ms | Pos: 26ms | Tot:  41ms | FPS:24.5   [0080] AGL:   2.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:71.4   process measurement time: 23.203465
-[0081] AGL:   2.0m | Det:   0ms | Mat:   0ms | Pos: 23ms | Tot:  36ms | FPS:27.4   [0082] AGL:   2.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:66.2   process measurement time: 19.619169
-[0083] AGL:   2.2m | Det:   0ms | Mat:   0ms | Pos: 20ms | Tot:  33ms | FPS:30.0   [0084] AGL:   2.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.1   process measurement time: 18.590204
-[0085] AGL:   2.3m | Det:   0ms | Mat:   0ms | Pos: 19ms | Tot:  33ms | FPS:30.6   [0086] AGL:   2.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:70.9   process measurement time: 27.597966
-[0087] AGL:   2.4m | Det:   0ms | Mat:   0ms | Pos: 28ms | Tot:  41ms | FPS:24.2   [0088] AGL:   2.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.5   process measurement time: 26.767686
-[0089] AGL:   2.6m | Det:   0ms | Mat:   0ms | Pos: 27ms | Tot:  41ms | FPS:24.2   [0090] AGL:   2.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:70.0   process measurement time: 23.280183
-[0091] AGL:   2.8m | Det:   0ms | Mat:   0ms | Pos: 23ms | Tot:  36ms | FPS:27.9   [0092] AGL:   2.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:305.2   process measurement time: 25.673242
-[0093] AGL:   3.0m | Det:   0ms | Mat:   0ms | Pos: 26ms | Tot:  29ms | FPS:34.4   [0094] AGL:   3.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:279.8   process measurement time: 27.818571
-[0095] AGL:   3.1m | Det:   0ms | Mat:   0ms | Pos: 28ms | Tot:  31ms | FPS:32.0   [0096] AGL:   3.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:301.7   process measurement time: 23.957214
-[0097] AGL:   3.3m | Det:   0ms | Mat:   0ms | Pos: 24ms | Tot:  28ms | FPS:36.2   [0098] AGL:   3.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:268.8   [VinsBackend] frame 50  dt=0.133153s  feats=150  carried=150 (100%)
-process measurement time: 30.409969
-[0099] AGL:   3.5m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  34ms | FPS:29.2   [0100] AGL:   3.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:316.7   process measurement time: 33.339086
-[0101] AGL:   3.7m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  37ms | FPS:27.0   [0102] AGL:   3.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:334.8   process measurement time: 31.033995
-[0103] AGL:   3.9m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  35ms | FPS:28.9   [0104] AGL:   4.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:314.1   process measurement time: 30.954508
-[0105] AGL:   4.0m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  34ms | FPS:29.0   [0106] AGL:   4.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:293.5   process measurement time: 32.137582
-[0107] AGL:   4.2m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  36ms | FPS:28.1   [0108] AGL:   4.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:281.4   process measurement time: 31.818900
-[0109] AGL:   4.3m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  35ms | FPS:28.2   [0110] AGL:   4.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:332.8   process measurement time: 38.725935
-[0111] AGL:   4.5m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  43ms | FPS:23.5   [0112] AGL:   4.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:293.8   process measurement time: 39.416738
-[0113] AGL:   4.6m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  43ms | FPS:23.4   [0114] AGL:   4.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:292.4   process measurement time: 36.022772
-[0115] AGL:   4.8m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  40ms | FPS:25.3   [0116] AGL:   4.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:324.7   process measurement time: 38.616647
-[0117] AGL:   5.0m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  42ms | FPS:23.8   [0118] AGL:   5.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:318.4   process measurement time: 43.807906
-[0119] AGL:   5.2m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  47ms | FPS:21.2   [0120] AGL:   5.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:271.3   process measurement time: 30.953617
-[0121] AGL:   5.4m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  34ms | FPS:29.2   [0122] AGL:   5.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:338.4   process measurement time: 78.822769
-[0123] AGL:   5.6m | Det:   0ms | Mat:   0ms | Pos: 79ms | Tot:  82ms | FPS:12.2   [0124] AGL:   5.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:293.1   process measurement time: 46.327643
-[0125] AGL:   5.8m | Det:   0ms | Mat:   0ms | Pos: 46ms | Tot:  50ms | FPS:20.1   [0126] AGL:   5.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:319.1   process measurement time: 41.050676
-[0127] AGL:   6.0m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  44ms | FPS:22.6   [0128] AGL:   6.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:318.9   process measurement time: 48.610633
-[0129] AGL:   6.2m | Det:   0ms | Mat:   0ms | Pos: 49ms | Tot:  52ms | FPS:19.1   [0130] AGL:   6.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:324.8   process measurement time: 35.500990
-[0131] AGL:   6.4m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  39ms | FPS:25.8   [0132] AGL:   6.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:281.1   process measurement time: 49.876327
-[0133] AGL:   6.6m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  53ms | FPS:18.8   [0134] AGL:   6.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:291.1   process measurement time: 47.972711
-[0135] AGL:   6.8m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  51ms | FPS:19.5   [0136] AGL:   6.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:289.8   process measurement time: 50.145395
-[0137] AGL:   7.0m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  54ms | FPS:18.6   [0138] AGL:   7.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:288.9   process measurement time: 33.652206
-[0139] AGL:   7.2m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  37ms | FPS:26.9   [0140] AGL:   7.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:296.6   process measurement time: 34.679693
-[0141] AGL:   7.4m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  38ms | FPS:26.2   [0142] AGL:   7.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:338.9   process measurement time: 41.160232
-[0143] AGL:   7.6m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  44ms | FPS:22.5   [0144] AGL:   7.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:282.6   process measurement time: 35.127849
-[0145] AGL:   7.8m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  38ms | FPS:26.1   [0146] AGL:   7.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:331.4   process measurement time: 32.899082
-[0147] AGL:   8.0m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  36ms | FPS:27.7   [0148] AGL:   8.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:259.6   [VinsBackend] frame 75  dt=0.132448s  feats=150  carried=150 (100%)
-process measurement time: 45.067213
-[0149] AGL:   8.2m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  48ms | FPS:20.7   [0150] AGL:   8.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:225.7   process measurement time: 65.590002
-[0151] AGL:   8.5m | Det:   0ms | Mat:   0ms | Pos: 66ms | Tot:  71ms | FPS:14.2   [0152] AGL:   8.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:222.3   process measurement time: 43.812169
-[0153] AGL:   8.7m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  48ms | FPS:20.8   [0154] AGL:   8.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:253.3   process measurement time: 56.430328
-[0155] AGL:   9.0m | Det:   0ms | Mat:   0ms | Pos: 57ms | Tot:  61ms | FPS:16.5   [0156] AGL:   9.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:265.8   process measurement time: 46.731723
-[0157] AGL:   9.2m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  51ms | FPS:19.6   [0158] AGL:   9.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:263.8   process measurement time: 62.921109
-[0159] AGL:   9.5m | Det:   0ms | Mat:   0ms | Pos: 63ms | Tot:  67ms | FPS:14.8   [0160] AGL:   9.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:229.6   process measurement time: 44.527074
-[0161] AGL:   9.8m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  49ms | FPS:20.2   [0162] AGL:  10.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:234.3   process measurement time: 44.585959
-[0163] AGL:  10.1m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  49ms | FPS:20.4   [0164] AGL:  10.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:217.7   process measurement time: 61.213555
-[0165] AGL:  10.5m | Det:   0ms | Mat:   0ms | Pos: 61ms | Tot:  65ms | FPS:15.3   [0166] AGL:  10.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:265.2   process measurement time: 43.721197
-[0167] AGL:  10.8m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  48ms | FPS:20.7   [0168] AGL:  10.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:246.8   process measurement time: 43.495101
-[0169] AGL:  11.1m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  50ms | FPS:20.1   [0170] AGL:  11.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:269.8   process measurement time: 43.063629
-[0171] AGL:  11.4m | Det:   0ms | Mat:   0ms | Pos: 43ms | Tot:  47ms | FPS:21.3   [0172] AGL:  11.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:221.4   process measurement time: 41.152173
-[0173] AGL:  11.8m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  45ms | FPS:22.1   [0174] AGL:  12.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:264.0   process measurement time: 44.012426
-[0175] AGL:  12.1m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  48ms | FPS:20.9   [0176] AGL:  12.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:260.0   process measurement time: 41.648931
-[0177] AGL:  12.5m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  46ms | FPS:21.9   [0178] AGL:  12.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:279.6   process measurement time: 55.990659
-[0179] AGL:  12.8m | Det:   0ms | Mat:   0ms | Pos: 56ms | Tot:  60ms | FPS:16.6   [0180] AGL:  13.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:260.3   process measurement time: 42.002234
-[0181] AGL:  13.1m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  46ms | FPS:21.7   [0182] AGL:  13.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:262.8   process measurement time: 50.328138
-[0183] AGL:  13.4m | Det:   0ms | Mat:   0ms | Pos: 51ms | Tot:  55ms | FPS:18.2   [0184] AGL:  13.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:241.0   process measurement time: 26.233802
-[0185] AGL:  13.7m | Det:   0ms | Mat:   0ms | Pos: 26ms | Tot:  30ms | FPS:33.1   [0186] AGL:  13.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:260.8   process measurement time: 33.390659
-[0187] AGL:  14.0m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  38ms | FPS:26.6   [0188] AGL:  14.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:276.2   process measurement time: 28.927606
-[0189] AGL:  14.2m | Det:   0ms | Mat:   0ms | Pos: 29ms | Tot:  33ms | FPS:30.6   [0190] AGL:  14.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:215.3   process measurement time: 43.621035
-[0191] AGL:  14.4m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  48ms | FPS:20.8   [0192] AGL:  14.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:230.9   process measurement time: 50.244374
-[0193] AGL:  14.7m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  54ms | FPS:18.6   [0194] AGL:  14.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:284.3   process measurement time: 41.426359
-[0195] AGL:  14.9m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  46ms | FPS:21.9   [0196] AGL:  15.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:262.7   process measurement time: 41.572495
-[0197] AGL:  15.1m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  45ms | FPS:22.0   [0198] AGL:  15.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:270.2   [VinsBackend] frame 100  dt=0.134717s  feats=150  carried=150 (100%)
-process measurement time: 62.369407
-[0199] AGL:  15.3m | Det:   0ms | Mat:   0ms | Pos: 63ms | Tot:  66ms | FPS:15.1   [0200] AGL:  15.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:223.3   process measurement time: 18.368342
-[0201] AGL:  15.5m | Det:   0ms | Mat:   0ms | Pos: 19ms | Tot:  22ms | FPS:44.9   [0202] AGL:  15.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:272.0   process measurement time: 55.700171
-[0203] AGL:  15.7m | Det:   0ms | Mat:   0ms | Pos: 56ms | Tot:  60ms | FPS:16.8   [0204] AGL:  15.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:276.5   process measurement time: 36.203625
-[0205] AGL:  15.9m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  55ms | FPS:18.2   [0206] AGL:  16.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:63.0   process measurement time: 37.199005
-[0207] AGL:  16.1m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  41ms | FPS:24.2   [0208] AGL:  16.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:213.8   process measurement time: 47.671866
-[0209] AGL:  16.2m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  52ms | FPS:19.4   [0210] AGL:  16.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:57.5   process measurement time: 39.731773
-[0211] AGL:  16.4m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  44ms | FPS:22.8   [0212] AGL:  16.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:252.5   process measurement time: 52.096757
-[0213] AGL:  16.5m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  57ms | FPS:17.6   [0214] AGL:  16.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  22ms | FPS:45.2   process measurement time: 51.871436
-[0215] AGL:  16.7m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  56ms | FPS:17.8   [0216] AGL:  16.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:221.0   process measurement time: 44.875015
-
-[Aligner] yaw=134.014 deg after 10.1876 m of GT travel
-[0217] AGL:  16.8m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  61ms | FPS:16.5   [0218] AGL:  16.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:252.0   process measurement time: 33.435935
-[0219] AGL:  17.0m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  50ms | FPS:19.9   [0220] AGL:  17.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   5ms | FPS:220.6   process measurement time: 25.803504
-[0221] AGL:  17.1m | Det:   0ms | Mat:   0ms | Pos: 26ms | Tot:  39ms | FPS:25.3   [0222] AGL:  17.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:383.9   process measurement time: 20.423737
-[0223] AGL:  17.3m | Det:   0ms | Mat:   0ms | Pos: 20ms | Tot:  34ms | FPS:29.8   [0224] AGL:  17.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.5   process measurement time: 22.642529
-[0225] AGL:  17.4m | Det:   0ms | Mat:   0ms | Pos: 23ms | Tot:  34ms | FPS:29.0   [0226] AGL:  17.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.1   process measurement time: 34.599632
-[0227] AGL:  17.5m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.1   [0228] AGL:  17.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:69.7   process measurement time: 33.412488
-[0229] AGL:  17.7m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  46ms | FPS:21.7   [0230] AGL:  17.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.5   process measurement time: 34.937105
-[0231] AGL:  17.8m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.5   [0232] AGL:  17.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:71.5   process measurement time: 34.142477
-[0233] AGL:  17.9m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  46ms | FPS:21.6   [0234] AGL:  18.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.6   process measurement time: 30.272665
-[0235] AGL:  18.0m | Det:   0ms | Mat:   0ms | Pos: 30ms | Tot:  42ms | FPS:23.8   [0236] AGL:  18.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.1   process measurement time: 20.550285
-[0237] AGL:  18.2m | Det:   0ms | Mat:   0ms | Pos: 21ms | Tot:  33ms | FPS:30.1   [0238] AGL:  18.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:72.8   process measurement time: 32.161762
-[0239] AGL:  18.3m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  45ms | FPS:22.1   [0240] AGL:  18.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.4   process measurement time: 26.831260
-[0241] AGL:  18.4m | Det:   0ms | Mat:   0ms | Pos: 27ms | Tot:  39ms | FPS:25.4   [0242] AGL:  18.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.7   process measurement time: 27.828543
-[0243] AGL:  18.5m | Det:   0ms | Mat:   0ms | Pos: 28ms | Tot:  39ms | FPS:25.4   [0244] AGL:  18.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.0   process measurement time: 35.141860
-[0245] AGL:  18.6m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  48ms | FPS:20.9   [0246] AGL:  18.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.1   process measurement time: 27.547493
-[0247] AGL:  18.8m | Det:   0ms | Mat:   0ms | Pos: 28ms | Tot:  40ms | FPS:24.8   [0248] AGL:  18.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.3   [VinsBackend] frame 125  dt=0.134434s  feats=138  carried=133 (96.3768%)
-process measurement time: 28.804870
-[0249] AGL:  18.9m | Det:   0ms | Mat:   0ms | Pos: 29ms | Tot:  42ms | FPS:23.7   [0250] AGL:  18.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.6   process measurement time: 29.761355
-[0251] AGL:  19.0m | Det:   0ms | Mat:   0ms | Pos: 30ms | Tot:  42ms | FPS:24.1   [0252] AGL:  19.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.0   process measurement time: 36.128128
-[0253] AGL:  19.1m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  49ms | FPS:20.2   [0254] AGL:  19.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.5   process measurement time: 39.244399
-[0255] AGL:  19.2m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  51ms | FPS:19.7   [0256] AGL:  19.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.6   process measurement time: 38.667449
-[0257] AGL:  19.3m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  51ms | FPS:19.6   [0258] AGL:  19.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.4   process measurement time: 40.039027
-[0259] AGL:  19.5m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  52ms | FPS:19.3   [0260] AGL:  19.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.3   process measurement time: 36.589277
-[0261] AGL:  19.6m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.4   [0262] AGL:  19.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.4   process measurement time: 34.858245
-[0263] AGL:  19.7m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.1   [0264] AGL:  19.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.0   process measurement time: 34.654874
-[0265] AGL:  19.9m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.5   [0266] AGL:  19.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.3   process measurement time: 32.757404
-[0267] AGL:  20.0m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  45ms | FPS:22.4   [0268] AGL:  20.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.8   process measurement time: 37.854603
-[0269] AGL:  20.2m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  41ms | FPS:24.3   [0270] AGL:  20.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.3   process measurement time: 36.191940
-[0271] AGL:  20.3m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.7   [0272] AGL:  20.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.7   process measurement time: 35.244759
-[0273] AGL:  20.5m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  48ms | FPS:21.0   [0274] AGL:  20.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.1   process measurement time: 31.046836
-[0275] AGL:  20.6m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  43ms | FPS:23.4   [0276] AGL:  20.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.4   process measurement time: 35.813657
-[0277] AGL:  20.8m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.7   [0278] AGL:  20.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:333.7   process measurement time: 34.278746
-[0279] AGL:  21.0m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  38ms | FPS:26.7   [0280] AGL:  21.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.3   process measurement time: 32.101940
-[0281] AGL:  21.2m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  35ms | FPS:28.3   [0282] AGL:  21.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:317.8   process measurement time: 38.553022
-[0283] AGL:  21.4m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  51ms | FPS:19.7   [0284] AGL:  21.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:336.4   process measurement time: 38.726547
-[0285] AGL:  21.5m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  42ms | FPS:23.6   [0286] AGL:  21.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:330.2   process measurement time: 41.836255
-[0287] AGL:  21.8m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  45ms | FPS:22.2   [0288] AGL:  21.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.6   process measurement time: 37.534567
-[0289] AGL:  21.9m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:19.9   [0290] AGL:  22.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:314.7   process measurement time: 34.329939
-[0291] AGL:  22.1m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  46ms | FPS:21.8   [0292] AGL:  22.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   3ms | FPS:324.1   process measurement time: 38.036329
-[0293] AGL:  22.4m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.0   [0294] AGL:  22.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.8   process measurement time: 36.807131
-[0295] AGL:  22.5m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.4   [0296] AGL:  22.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.1   process measurement time: 37.674769
-[0297] AGL:  22.7m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.1   [0298] AGL:  22.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.3   [VinsBackend] frame 150  dt=0.133734s  feats=145  carried=129 (88.9655%)
-process measurement time: 38.066974
-[0299] AGL:  22.9m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  51ms | FPS:19.7   [0300] AGL:  23.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.8   process measurement time: 36.452040
-[0301] AGL:  23.1m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.5   [0302] AGL:  23.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.4   process measurement time: 31.816861
-[0303] AGL:  23.3m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  44ms | FPS:22.5   [0304] AGL:  23.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.0   process measurement time: 29.783249
-[0305] AGL:  23.5m | Det:   0ms | Mat:   0ms | Pos: 30ms | Tot:  42ms | FPS:23.7   [0306] AGL:  23.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.3   process measurement time: 32.967143
-[0307] AGL:  23.6m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  46ms | FPS:21.9   [0308] AGL:  23.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.6   process measurement time: 36.064151
-[0309] AGL:  23.8m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  49ms | FPS:20.5   [0310] AGL:  23.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.6   process measurement time: 34.645874
-[0311] AGL:  24.0m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.2   [0312] AGL:  24.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.5   process measurement time: 29.270496
-[0313] AGL:  24.2m | Det:   0ms | Mat:   0ms | Pos: 29ms | Tot:  41ms | FPS:24.6   [0314] AGL:  24.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.6   process measurement time: 30.513541
-[0315] AGL:  24.4m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  43ms | FPS:23.1   [0316] AGL:  24.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.2   process measurement time: 31.163592
-[0317] AGL:  24.7m | Det:   0ms | Mat:   0ms | Pos: 31ms | Tot:  45ms | FPS:22.2   [0318] AGL:  24.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.4   process measurement time: 43.594855
-[0319] AGL:  24.9m | Det:   0ms | Mat:   0ms | Pos: 44ms | Tot:  58ms | FPS:17.4   [0320] AGL:  25.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:69.8   process measurement time: 32.310318
-[0321] AGL:  25.2m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  44ms | FPS:22.7   [0322] AGL:  25.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.1   process measurement time: 32.367393
-[0323] AGL:  25.4m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  45ms | FPS:22.4   [0324] AGL:  25.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:64.5   process measurement time: 32.318726
-[0325] AGL:  25.7m | Det:   0ms | Mat:   0ms | Pos: 32ms | Tot:  44ms | FPS:22.5   [0326] AGL:  25.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.2   process measurement time: 35.089207
-[0327] AGL:  26.0m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  48ms | FPS:20.7   [0328] AGL:  26.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.2   process measurement time: 34.975396
-[0329] AGL:  26.3m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.1   [0330] AGL:  26.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:76.2   process measurement time: 35.459138
-[0331] AGL:  26.6m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.7   [0332] AGL:  26.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.3   process measurement time: 36.267320
-[0333] AGL:  26.9m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  50ms | FPS:20.1   [0334] AGL:  27.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:69.3   process measurement time: 60.600935
-[0335] AGL:  27.2m | Det:   0ms | Mat:   0ms | Pos: 61ms | Tot:  76ms | FPS:13.1   [0336] AGL:  27.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  26ms | FPS:39.1   process measurement time: 73.596826
-[0337] AGL:  27.5m | Det:   0ms | Mat:   0ms | Pos: 74ms | Tot:  90ms | FPS:11.1   [0338] AGL:  27.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:59.2   process measurement time: 44.816754
-[0339] AGL:  27.8m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  61ms | FPS:16.4   [0340] AGL:  27.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:61.1   process measurement time: 45.313877
-[0341] AGL:  28.1m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  61ms | FPS:16.4   [0342] AGL:  28.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  18ms | FPS:56.8   process measurement time: 47.371706
-[0343] AGL:  28.5m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  64ms | FPS:15.7   [0344] AGL:  28.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:58.4   process measurement time: 44.970218
-[0345] AGL:  28.8m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  60ms | FPS:16.6   [0346] AGL:  29.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:59.3   process measurement time: 43.070020
-[0347] AGL:  29.2m | Det:   0ms | Mat:   0ms | Pos: 43ms | Tot:  59ms | FPS:17.0   [0348] AGL:  29.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:63.5   [VinsBackend] frame 175  dt=0.133415s  feats=146  carried=138 (94.5205%)
-process measurement time: 51.849432
-[0349] AGL:  29.6m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  68ms | FPS:14.8   [0350] AGL:  29.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  18ms | FPS:55.3   process measurement time: 44.949343
-[0351] AGL:  29.9m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  61ms | FPS:16.5   [0352] AGL:  30.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  18ms | FPS:56.6   process measurement time: 47.971957
-[0353] AGL:  30.3m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  65ms | FPS:15.5   [0354] AGL:  30.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:61.7   process measurement time: 46.582315
-[0355] AGL:  30.7m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  63ms | FPS:15.8   [0356] AGL:  30.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.8   process measurement time: 51.427500
-[0357] AGL:  31.1m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  68ms | FPS:14.8   [0358] AGL:  31.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.3   process measurement time: 47.682737
-[0359] AGL:  31.5m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  64ms | FPS:15.7   [0360] AGL:  31.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.4   process measurement time: 47.957271
-[0361] AGL:  32.0m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  64ms | FPS:15.6   [0362] AGL:  32.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  19ms | FPS:53.8   process measurement time: 48.242972
-[0363] AGL:  32.3m | Det:   0ms | Mat:   0ms | Pos: 48ms | Tot:  65ms | FPS:15.5   [0364] AGL:  32.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.5   process measurement time: 50.880707
-[0365] AGL:  32.8m | Det:   0ms | Mat:   0ms | Pos: 51ms | Tot:  67ms | FPS:14.9   [0366] AGL:  33.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:58.4   process measurement time: 50.106545
-[0367] AGL:  33.2m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  66ms | FPS:15.1   [0368] AGL:  33.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.3   process measurement time: 46.566340
-[0369] AGL:  33.6m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  62ms | FPS:16.1   [0370] AGL:  33.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.5   process measurement time: 46.538529
-[0371] AGL:  34.0m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  62ms | FPS:16.0   [0372] AGL:  34.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:58.5   process measurement time: 49.085965
-[0373] AGL:  34.5m | Det:   0ms | Mat:   0ms | Pos: 49ms | Tot:  65ms | FPS:15.4   [0374] AGL:  34.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:63.6   process measurement time: 53.674079
-[0375] AGL:  34.9m | Det:   0ms | Mat:   0ms | Pos: 54ms | Tot:  70ms | FPS:14.2   [0376] AGL:  35.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:60.9   process measurement time: 49.647323
-[0377] AGL:  35.4m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  67ms | FPS:15.0   [0378] AGL:  35.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.6   process measurement time: 52.459572
-[0379] AGL:  35.9m | Det:   0ms | Mat:   0ms | Pos: 53ms | Tot:  68ms | FPS:14.7   [0380] AGL:  36.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.0   process measurement time: 49.984359
-[0381] AGL:  36.3m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  66ms | FPS:15.2   [0382] AGL:  36.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:61.5   process measurement time: 49.864350
-[0383] AGL:  36.8m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  66ms | FPS:15.1   [0384] AGL:  37.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:58.5   process measurement time: 47.157805
-[0385] AGL:  37.3m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  63ms | FPS:16.0   [0386] AGL:  37.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:60.8   process measurement time: 49.349854
-[0387] AGL:  37.7m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  65ms | FPS:15.4   [0388] AGL:  38.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.8   process measurement time: 33.301913
-[0389] AGL:  38.2m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  45ms | FPS:22.2   [0390] AGL:  38.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.7   process measurement time: 33.990423
-[0391] AGL:  38.7m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  45ms | FPS:22.0   [0392] AGL:  38.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:84.0   process measurement time: 35.070547
-[0393] AGL:  39.1m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.4   [0394] AGL:  39.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.5   process measurement time: 35.713088
-[0395] AGL:  39.6m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  39ms | FPS:25.7   [0396] AGL:  39.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.1   process measurement time: 37.803975
-[0397] AGL:  40.1m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.2   [0398] AGL:  40.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.7   [VinsBackend] frame 200  dt=0.133836s  feats=145  carried=137 (94.4828%)
-process measurement time: 35.886194
-[0399] AGL:  40.5m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.7   [0400] AGL:  40.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.9   process measurement time: 37.181399
-[0401] AGL:  40.9m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.2   [0402] AGL:  41.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.3   process measurement time: 37.301715
-[0403] AGL:  41.4m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  50ms | FPS:20.1   [0404] AGL:  41.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.6   process measurement time: 37.258945
-[0405] AGL:  41.8m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.3   [0406] AGL:  42.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.6   process measurement time: 35.846378
-[0407] AGL:  42.2m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.8   [0408] AGL:  42.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.3   process measurement time: 38.898006
-[0409] AGL:  42.7m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  52ms | FPS:19.3   [0410] AGL:  42.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.8   process measurement time: 38.275573
-[0411] AGL:  43.1m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:19.9   [0412] AGL:  43.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.5   process measurement time: 38.965489
-[0413] AGL:  43.6m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  51ms | FPS:19.6   [0414] AGL:  43.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.6   process measurement time: 39.655050
-[0415] AGL:  44.1m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  53ms | FPS:19.0   [0416] AGL:  44.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.8   process measurement time: 38.256699
-[0417] AGL:  44.5m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  51ms | FPS:19.7   [0418] AGL:  44.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.5   process measurement time: 39.935335
-[0419] AGL:  45.0m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  52ms | FPS:19.3   [0420] AGL:  45.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  20ms | FPS:50.5   process measurement time: 51.863590
-[0421] AGL:  45.4m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  65ms | FPS:15.4   [0422] AGL:  45.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.2   process measurement time: 37.475175
-[0423] AGL:  45.9m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  49ms | FPS:20.3   [0424] AGL:  46.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:70.6   process measurement time: 36.850550
-[0425] AGL:  46.4m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  50ms | FPS:20.1   [0426] AGL:  46.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:84.3   process measurement time: 37.010746
-[0427] AGL:  46.9m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.5   [0428] AGL:  47.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.3   process measurement time: 37.889841
-[0429] AGL:  47.4m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.0   [0430] AGL:  47.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.1   process measurement time: 36.046832
-[0431] AGL:  47.8m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.7   [0432] AGL:  48.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:80.1   process measurement time: 36.328096
-[0433] AGL:  48.2m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  49ms | FPS:20.5   [0434] AGL:  48.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.5   process measurement time: 41.901029
-[0435] AGL:  48.7m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  54ms | FPS:18.6   [0436] AGL:  49.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:86.1   process measurement time: 37.267047
-[0437] AGL:  49.2m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  50ms | FPS:20.2   [0438] AGL:  49.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.8   process measurement time: 44.452247
-[0439] AGL:  49.6m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  57ms | FPS:17.4   [0440] AGL:  49.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.5   process measurement time: 38.470278
-[0441] AGL:  50.2m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  50ms | FPS:19.9   [0442] AGL:  50.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.7   process measurement time: 37.641788
-[0443] AGL:  50.6m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.0   [0444] AGL:  50.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.7   process measurement time: 38.245442
-[0445] AGL:  51.1m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:19.8   [0446] AGL:  51.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:73.6   process measurement time: 46.461116
-[0447] AGL:  51.6m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  59ms | FPS:17.1   [0448] AGL:  51.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.2   [VinsBackend] frame 225  dt=0.130744s  feats=146  carried=141 (96.5753%)
-process measurement time: 46.603546
-[0449] AGL:  52.0m | Det:   0ms | Mat:   0ms | Pos: 47ms | Tot:  58ms | FPS:17.2   [0450] AGL:  52.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:78.9   process measurement time: 39.506433
-[0451] AGL:  52.5m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  52ms | FPS:19.4   [0452] AGL:  52.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.8   process measurement time: 34.259496
-[0453] AGL:  53.0m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  46ms | FPS:21.8   [0454] AGL:  53.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:88.6   process measurement time: 35.025478
-[0455] AGL:  53.5m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.7   [0456] AGL:  53.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:94.9   process measurement time: 36.860310
-[0457] AGL:  54.0m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  49ms | FPS:20.6   [0458] AGL:  54.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:91.3   process measurement time: 35.283422
-[0459] AGL:  54.4m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.3   [0460] AGL:  54.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:83.3   process measurement time: 37.769288
-[0461] AGL:  54.9m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  50ms | FPS:20.0   [0462] AGL:  55.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:93.9   process measurement time: 40.919937
-[0463] AGL:  55.4m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  53ms | FPS:18.9   [0464] AGL:  55.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:82.1   process measurement time: 34.901231
-[0465] AGL:  55.9m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.4   [0466] AGL:  56.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:88.4   process measurement time: 34.873070
-[0467] AGL:  56.4m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.8   [0468] AGL:  56.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:83.7   process measurement time: 34.121186
-[0469] AGL:  56.9m | Det:   0ms | Mat:   0ms | Pos: 34ms | Tot:  44ms | FPS:22.5   [0470] AGL:  57.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.5   process measurement time: 34.742601
-[0471] AGL:  57.4m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.8   [0472] AGL:  57.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:79.3   process measurement time: 35.466868
-[0473] AGL:  57.9m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  46ms | FPS:21.8   [0474] AGL:  58.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:94.7   process measurement time: 35.056163
-[0475] AGL:  58.4m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.6   [0476] AGL:  58.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:85.1   process measurement time: 35.029061
-[0477] AGL:  58.9m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.4   [0478] AGL:  59.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:85.1   process measurement time: 37.605681
-[0479] AGL:  59.5m | Det:   0ms | Mat:   0ms | Pos: 38ms | Tot:  52ms | FPS:19.3   [0480] AGL:  59.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  15ms | FPS:65.5   process measurement time: 37.243235
-[0481] AGL:  60.0m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  51ms | FPS:19.5   [0482] AGL:  60.2m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:84.1   process measurement time: 34.646524
-[0483] AGL:  60.5m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.7   [0484] AGL:  60.7m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:87.4   process measurement time: 33.016688
-[0485] AGL:  61.0m | Det:   0ms | Mat:   0ms | Pos: 33ms | Tot:  44ms | FPS:22.7   [0486] AGL:  61.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:75.2   process measurement time: 50.710040
-[0487] AGL:  61.5m | Det:   0ms | Mat:   0ms | Pos: 51ms | Tot:  67ms | FPS:15.0   [0488] AGL:  61.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:60.6   process measurement time: 51.930286
-[0489] AGL:  62.1m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  68ms | FPS:14.8   [0490] AGL:  62.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:63.7   process measurement time: 54.028070
-[0491] AGL:  62.5m | Det:   0ms | Mat:   0ms | Pos: 54ms | Tot:  72ms | FPS:14.0   [0492] AGL:  62.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.1   wait for imu ... 
-[0493] AGL:  63.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.1   [0494] AGL:  63.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:61.5   process measurement time: 49.309387
-[0495] AGL:  63.6m | Det:   0ms | Mat:   0ms | Pos: 49ms | Tot:  64ms | FPS:15.5   [0496] AGL:  63.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:57.4   process measurement time: 49.824840
-[0497] AGL:  64.1m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  66ms | FPS:15.2   [0498] AGL:  64.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:   4ms | FPS:230.3   [VinsBackend] frame 250  dt=0.132883s  feats=146  carried=143 (97.9452%)
-process measurement time: 50.753242
-[0499] AGL:  64.6m | Det:   0ms | Mat:   0ms | Pos: 51ms | Tot:  67ms | FPS:15.0   [0500] AGL:  64.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  16ms | FPS:62.8   process measurement time: 50.246647
-[0501] AGL:  65.1m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  66ms | FPS:15.1   [0502] AGL:  65.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.3   process measurement time: 59.855377
-[0503] AGL:  65.7m | Det:   0ms | Mat:   0ms | Pos: 60ms | Tot:  76ms | FPS:13.2   [0504] AGL:  65.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:58.3   process measurement time: 67.919599
-[0505] AGL:  66.2m | Det:   0ms | Mat:   0ms | Pos: 68ms | Tot:  85ms | FPS:11.8   [0506] AGL:  66.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  18ms | FPS:56.0   process measurement time: 51.246552
-[0507] AGL:  66.7m | Det:   0ms | Mat:   0ms | Pos: 51ms | Tot:  67ms | FPS:14.9   [0508] AGL:  67.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  17ms | FPS:60.1   process measurement time: 51.487010
-[0509] AGL:  67.3m | Det:   0ms | Mat:   0ms | Pos: 52ms | Tot:  68ms | FPS:14.8   [0510] AGL:  67.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:74.3   process measurement time: 35.417628
-[0511] AGL:  67.7m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.8   [0512] AGL:  68.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:93.0   process measurement time: 35.266862
-[0513] AGL:  68.3m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  46ms | FPS:21.8   [0514] AGL:  68.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:89.7   process measurement time: 34.609675
-[0515] AGL:  68.8m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  45ms | FPS:22.1   [0516] AGL:  69.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:86.9   process measurement time: 35.381164
-[0517] AGL:  69.3m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  47ms | FPS:21.4   [0518] AGL:  69.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  14ms | FPS:71.0   process measurement time: 44.717278
-[0519] AGL:  69.8m | Det:   0ms | Mat:   0ms | Pos: 45ms | Tot:  57ms | FPS:17.5   [0520] AGL:  70.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.7   process measurement time: 59.521560
-[0521] AGL:  70.4m | Det:   0ms | Mat:   0ms | Pos: 60ms | Tot:  71ms | FPS:14.2   [0522] AGL:  70.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:91.6   process measurement time: 36.205092
-[0523] AGL:  70.8m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  48ms | FPS:20.9   [0524] AGL:  71.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:87.9   process measurement time: 50.055132
-[0525] AGL:  71.4m | Det:   0ms | Mat:   0ms | Pos: 50ms | Tot:  61ms | FPS:16.3   [0526] AGL:  71.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:85.6   process measurement time: 35.577111
-[0527] AGL:  71.9m | Det:   0ms | Mat:   0ms | Pos: 36ms | Tot:  47ms | FPS:21.4   [0528] AGL:  72.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:90.8   process measurement time: 35.353548
-[0529] AGL:  72.3m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  47ms | FPS:21.3   [0530] AGL:  72.6m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:84.5   process measurement time: 41.926850
-[0531] AGL:  72.9m | Det:   0ms | Mat:   0ms | Pos: 42ms | Tot:  53ms | FPS:18.7   [0532] AGL:  73.1m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:86.6   process measurement time: 36.977106
-[0533] AGL:  73.3m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  48ms | FPS:20.7   [0534] AGL:  73.5m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:84.2   process measurement time: 39.005840
-[0535] AGL:  73.7m | Det:   0ms | Mat:   0ms | Pos: 39ms | Tot:  50ms | FPS:20.0   [0536] AGL:  74.0m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  13ms | FPS:77.8   process measurement time: 40.983300
-[0537] AGL:  74.2m | Det:   0ms | Mat:   0ms | Pos: 41ms | Tot:  52ms | FPS:19.2   [0538] AGL:  74.4m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:89.1   process measurement time: 34.580508
-[0539] AGL:  74.7m | Det:   0ms | Mat:   0ms | Pos: 35ms | Tot:  45ms | FPS:22.1   [0540] AGL:  74.9m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  11ms | FPS:94.5   process measurement time: 37.243218
-[0541] AGL:  75.1m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  48ms | FPS:20.8   [0542] AGL:  75.3m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:83.4   process measurement time: 39.481331
-[0543] AGL:  75.6m | Det:   0ms | Mat:   0ms | Pos: 40ms | Tot:  52ms | FPS:19.4   [0544] AGL:  75.8m | Det:   0ms | Mat:   0ms | Pos:  0ms | Tot:  12ms | FPS:81.9   process measurement time: 36.698610
-[0545] AGL:  76.0m | Det:   0ms | Mat:   0ms | Pos: 37ms | Tot:  48ms | FPS:20.7   
