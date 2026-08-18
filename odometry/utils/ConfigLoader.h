@@ -57,6 +57,10 @@ struct RosbagConfig {
     double viz_scale = 0.5;                   // 2D trajectory visualizer px-per-metre scale
     double aligner_init_distance = 10.0;      // GT travel (m) before solving the VO->GT yaw
     bool altimeter_scale = false;             // feed AGL so homography scale comes from altitude
+    // Path to the VINS-Fusion yaml that configures the backend (camera-IMU
+    // extrinsic, IMU noise densities, td, solver limits). Relative to the
+    // process CWD. Required: there is no estimator without it.
+    std::string vins_config;
 };
 
 // Wraps an OpenCV FileStorage handle and converts a YAML config file into an

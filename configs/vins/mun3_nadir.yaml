@@ -1,0 +1,114 @@
+%YAML:1.0
+
+# MUN-FRL Bell412 dataset3 ("mun3") - nadir/down camera + Xsens IMU.
+#
+# Derived from this fork's own Bell412 config (payload_down_NRC1.yaml, written
+# for bell412_dataset1). Camera model, body_T_cam0, IMU noise and td are
+# UNCHANGED from that file - they are the dataset creators' own values and are
+# identical across the Bell412 sequences.
+#
+# Only the following were changed, for a pure-VIO run on dataset3:
+#   * frl_path        -> the dataset3 ground truth
+#   * ppk_path        -> removed (dataset3 ships no _ppk.pos, only _frl.pos)
+#   * use_gpu / use_gpu_acc_flow -> 0 (this build has no CUDA OpenCV)
+#   * use_lidar / use_loam       -> 0 (VIO only, to match the published
+#                                  VINS-Fusion number for this sequence)
+#   * use_frl_rot     -> 0 (the NRC1 config had this at 1, which feeds ground
+#                        truth ROTATION into the estimator; that would
+#                        invalidate the evaluation)
+#   * output_path / pose_graph_save_path -> this project's results dir
+
+#common parameters
+#support: 1 imu 1 cam; 1 imu 2 cam: 2 cam;
+imu: 1
+num_of_cam: 1
+
+imu_topic: "/imu/data"
+image0_topic: "/camera/image_mono"
+output_path: "./vins_output"
+
+cam0_calib: "payload_cam_down_NRC1.yaml"
+image_width: 1440
+image_height: 1080
+
+#Lidar info
+use_lidar: 0   # adds depth enhance VO
+use_loam: 0    # performs a loam thread
+point_cloud_topic: "/velodyne_points"
+use_dense_cloud: 1
+lidar_skip: 3
+
+map_theta: 50   # so that gps path has the correct rotation to visualize
+map_theta_optimize : 0
+frl_path: "/home/lysenko/VO-datasets/MUN-FRL/Bell412-3/bell412_dataset3_frl.pos"
+viz_ppk: 0    # dataset3 has no ppk file
+viz_frl: 1    # visualise ground truth only (does not enter the estimator)
+use_mag: 0    # to enable yaw updates
+use_gps: 0    # to do gps update
+use_frl_rot : 0 # MUST stay 0: injects GT rotation into the estimator
+use_frl : 0
+use_ppk : 0
+
+# Extrinsic parameter between IMU and Camera.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters.
+
+body_T_cam0: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [-0.01039363,   0.99994595,  0.00027614, -0.27939175,
+           -0.99982944, -0.0103882,  -0.01527021, 0.00394073,
+           -0.01526652,  -0.00043481, 0.99988337, -0.00039529,
+           0, 0, 0, 1]
+
+#Tmatrix from lidar frame to camera frame, cam^T_lidar (unused, use_lidar: 0)
+cam0_T_lidar: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: d
+   data: [0.1201, 0.9927, -0.0042, -0.27939175,
+          -0.0165,  0.0062,  0.9998, 0.00394073,
+           0.9926, -0.1200,  0.0171, -0.00039529,
+                0,       0,       0,      1 ]
+
+lidar_to_cam_tx: 0
+lidar_to_cam_ty: 0
+lidar_to_cam_tz: 0
+lidar_to_cam_rx: 0
+lidar_to_cam_ry: 0
+lidar_to_cam_rz: 3.11
+
+#Multiple thread support
+multiple_thread: 0   # synchronous replay: inputFeature() runs processMeasurements() inline
+use_gpu: 0
+use_gpu_acc_flow: 0
+
+#feature traker paprameters
+max_cnt: 150            # max feature number in feature tracking
+min_dist: 30            # min distance between two features
+freq: 10                # frequence (Hz) of publish tracking result
+F_threshold: 1.0        # ransac threshold (pixel)
+show_track: 1           # publish tracking image as topic
+equalize: 1
+flow_back: 1            # forward+backward optical flow
+
+#optimization parameters
+max_solver_time: 0.04   # max solver itration time (s)
+max_num_iterations: 8   # max solver itrations
+keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
+
+#imu parameters       The more accurate parameters you provide, the better performance
+acc_n: 0.08          # accelerometer measurement noise standard deviation.
+gyr_n: 0.004         # gyroscope measurement noise standard deviation.
+acc_w: 0.00004       # accelerometer bias random work noise standard deviation.
+gyr_w: 0.0001        # gyroscope bias random work noise standard deviation.
+g_norm: 9.803        # gravity magnitude
+
+#unsynchronization parameters
+estimate_td: 0       # online estimate time offset between camera and imu
+td: -0.0297405129318 # image clock + td = IMU clock
+
+#loop closure parameters
+load_previous_pose_graph: 0
+pose_graph_save_path: "./vins_output/pose_graph/"
+save_image: 0        # 0: do not keep images in the pose graph (saves RAM)

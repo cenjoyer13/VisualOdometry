@@ -56,3 +56,6 @@ CLAUDE.md
 *.CLAUDE.md
 SKILL.md
 *PLAN.md
+
+# VINS backend run outputs (output_path in the vins yaml)
+vins_output/

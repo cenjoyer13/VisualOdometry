@@ -342,7 +342,13 @@ int main(int argc, char** argv) {
         baseline_agl = prescanMinGpsAltitude(bag_cfg.bag_path, bag_cfg.gps_topic);
     }
 
-    auto pipeline = OdometryPipeline::build(config);
+    if (bag_cfg.vins_config.empty()) {
+        std::cerr << "Fatal: `vins_config:` is missing from " << yaml_file
+                  << ". It must point at a VINS-Fusion yaml (camera-IMU extrinsic,\n"
+                     "IMU noise densities, td). There is no estimator without it.\n";
+        return -1;
+    }
+    auto pipeline = OdometryPipeline::build(config, bag_cfg.vins_config);
 
     std::ofstream log_file(out_path);
     log_file << "Frame,Pred_X,Pred_Y,Pred_Z,Q_X,Q_Y,Q_Z,Q_W\n";
@@ -404,13 +410,12 @@ int main(int argc, char** argv) {
         if (topic == bag_cfg.imu_topic) {
             auto imu = m.instantiate<sensor_msgs::Imu>();
             if (!imu) continue;
-            // Feed the inertial layer (gyro/vio modes); no-op when IMU is off.
-            // Use the IMU sensor-clock stamp so the camera-IMU td offset lines up.
-            if (config.imu_params.enabled()) {
-                pipeline->addImu(imu->header.stamp.toSec(),
-                    cv::Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z),
-                    cv::Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z));
-            }
+            // Every IMU sample goes to the backend: VINS owns buffering,
+            // preintegration and the td offset. Unconditional now -- there is no
+            // vision-only mode left to gate on.
+            pipeline->addImu(imu->header.stamp.toSec(),
+                cv::Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z),
+                cv::Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z));
             // GT attitude from the IMU orientation only when PPK/FRL isn't driving it.
             if (!use_ppk)
                 cur_R = quatToRot(imu->orientation.x, imu->orientation.y,
@@ -463,7 +468,10 @@ int main(int argc, char** argv) {
         if (camera) frame = camera->undistortImage(frame);
 
         // Image timestamp on the IMU clock: image_clock + td = imu_clock.
-        const double frame_time = img_msg->header.stamp.toSec() + config.imu_params.td;
+        // Raw image stamp: VINS applies its own configured td internally
+        // (processMeasurements does curTime = t + td). Pre-shifting here would
+        // apply it twice.
+        const double frame_time = img_msg->header.stamp.toSec();
 
         GroundTruthData current_gt;
         current_gt.position = cur_position;
@@ -481,8 +489,10 @@ int main(int argc, char** argv) {
             // Body-referenced VO pose in the display frame: extrinsic + the
             // handedness sign flip applied (conjugation by traj_flip keeps the
             // rotation valid), but not yet the yaw alignment.
-            cv::Mat M = traj_flip * pipeline->getGlobalTransformVO()
-                        * cam0_T_body * traj_flip;
+            // getGlobalTransformVO() is already a BODY pose (VINS estimates the
+            // IMU state), so cam0_T_body must NOT be applied -- the old pipeline
+            // integrated a camera pose and needed it.
+            cv::Mat M = traj_flip * pipeline->getGlobalTransformVO() * traj_flip;
 
             // Auto-aligner: record the VO and GT start once tracking begins, and
             // once GT has travelled aligner_init_distance, solve the yaw that

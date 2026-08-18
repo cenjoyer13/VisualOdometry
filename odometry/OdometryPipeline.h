@@ -1,73 +1,78 @@
 #pragma once
 #include <memory>
-#include <vector>
+#include <string>
 #include <cstdint>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include "OdometryTypes.h"
 #include "frontend/IFrontend.h"
-#include "pose_estimators/IPoseEstimator.h"
-#include "scale_estimators/IScaleEstimator.h"
-#include "integrators/ITrajectoryIntegrator.h"
-#include "LocalBundleAdjustment.h"
+#include "vins/VinsBackend.h"
 
+// Frontend + VINS backend.
+//
+// This replaces the previous estimate-relative-pose / rescale-with-ground-truth
+// / integrate / smooth-with-GTSAM stack wholesale. The old chain could not
+// estimate metric scale at all -- it read it from GroundTruthData (or an
+// altimeter via the Homography path), which is why adding an IMU to it never
+// improved anything: the IMU's one irreplaceable contribution was already being
+// supplied by a cheat, and the pose estimator's normalized translation had
+// thrown the metric content away before any fusion could see it.
+//
+// Now the pipeline owns only "how correspondences are produced" and hands them
+// to VINS, which owns pose, scale, gravity, biases and marginalization. That
+// makes the frontend the experimental variable, and -- because scale is no
+// longer fed in -- makes frontend comparisons actually meaningful.
+//
+// Keyframing is VINS's decision now (parallax-based, inside FeatureManager), so
+// every processed frame is forwarded. promoteKeyframe() is still called every
+// frame, which is exactly how VINS's own tracker behaves: it re-anchors and
+// replenishes corners continuously rather than holding an anchor.
 class OdometryPipeline {
-private:
-    OdometryConfig config;
-
-    bool is_first_frame;
-    GroundTruthData gt_prev;
-
-    // Per-frame metrics and the last-rendered debug overlay.
-    PipelineMetrics metrics;
-    cv::Mat debug_frame;
-
-    std::unique_ptr<IFrontend> frontend;
-    std::unique_ptr<IPoseEstimator> pose_estimator;
-    std::unique_ptr<IScaleEstimator> scale_estimator;
-    std::unique_ptr<ITrajectoryIntegrator> integrator;
-
-    std::unique_ptr<LocalBundleAdjustment> lba_;
-    int current_frame_id_ = 0;
-
-    // Keyframing: frames matched against the current keyframe without yet
-    // producing a new one. Caps how long the anchor is held (see processFrame).
-    int frames_since_keyframe_ = 0;
-
-    // IMU buffering (Phase 0: accumulated only; consumed by preintegration in a
-    // later phase). Timestamp of the most recent processFrame; synthetic counter
-    // backs the legacy 2-arg overload so vision-only callers stay unchanged.
-    std::vector<ImuSample> imu_buffer_;
-    double last_frame_time_ = -1.0;
-    double last_keyframe_time_ = -1.0;
-    uint64_t synthetic_frame_counter_ = 0;
-
 public:
     ~OdometryPipeline();
 
-    static std::unique_ptr<OdometryPipeline> build(const OdometryConfig& config);
+    // `vins_config` is a stock VINS-Fusion yaml; see VinsBackend.
+    static std::unique_ptr<OdometryPipeline> build(const OdometryConfig& config,
+                                                   const std::string& vins_config);
 
     OdometryPipeline(const OdometryConfig& cfg,
                      std::unique_ptr<IFrontend> f,
-                     std::unique_ptr<IPoseEstimator> p,
-                     std::unique_ptr<IScaleEstimator> s,
-                     std::unique_ptr<ITrajectoryIntegrator> i);
+                     std::unique_ptr<VinsBackend> b);
 
-    // Vision-only entry point (unchanged). Forwards with a synthetic timestamp
-    // and no IMU association.
+    // `timestamp` is the image time on the IMU clock (seconds). GroundTruthData
+    // is accepted for logging/evaluation only -- nothing in the estimate reads
+    // it. The 2-arg overload exists for callers with no clock; it synthesizes a
+    // monotonic timestamp and is useless for VIO (the IMU could not be
+    // associated), so it is kept only to keep non-VIO tools compiling.
+    void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt, double timestamp);
     void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt);
 
-    // Timestamped entry point. timestamp (seconds) tags the frame so buffered
-    // IMU can be associated to keyframe intervals in later phases.
-    void processFrame(DeviceBuffer& frame, const GroundTruthData& current_gt, double timestamp);
-
-    // Feed a single IMU sample. Buffered in timestamp order by the caller.
+    // IMU sample on the IMU clock. Units m/s^2 and rad/s. Forwarded straight to
+    // VINS, which owns buffering and preintegration.
     void addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr);
 
+    // Latest optimized body pose in the world frame (4x4 CV_64F). Identity
+    // until VINS finishes initialization.
     cv::Mat getGlobalTransformVO() const;
+
+    // True once VINS is running its nonlinear solver, i.e. the pose is real.
     bool isTrackingActive() const;
 
     const PipelineMetrics& getMetrics() const { return metrics; }
     cv::Mat getDebugFrame() const { return debug_frame; }
+    const VinsBackend& backend() const { return *backend_; }
+
+private:
+    OdometryConfig config;
+
+    PipelineMetrics metrics;
+    cv::Mat debug_frame;
+
+    std::unique_ptr<IFrontend> frontend;
+    std::unique_ptr<VinsBackend> backend_;
+
+    bool is_first_frame = true;
+    bool warned_no_track_ids_ = false;
+    uint64_t synthetic_frame_counter_ = 0;
 };

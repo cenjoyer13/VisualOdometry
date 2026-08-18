@@ -4,7 +4,6 @@
 #include <map>
 #include <string>
 
-#include "inertial/ImuTypes.h"
 
 // Backend routing tag carried on every detector/matcher.
 enum class ComputeBackend {
@@ -73,55 +72,10 @@ struct BucketingConfig {
     int max_features_per_bucket = 20;
 };
 
-// LocalBundleAdjustment tunables. Defaults are the values previously
-// hardcoded inside runOptimization; YAML overrides each field individually.
-struct LBAParams {
-    // Sliding-window mechanics.
-    int window_size = 10;
-    int opt_stride = 2;
-
-    // Tight prior on the oldest pose in the window; pins the gauge so the
-    // optimizer cannot drift the window globally.
-    double anchor_prior_sigma = 1e-4;
-
-    // Loose prior on the newest pose; caps how far one pass is allowed to
-    // pull the trajectory before publishing.
-    double end_prior_rot_sigma = 0.02;     // rad, per axis
-    double end_prior_trans_sigma = 0.20;   // m, per axis
-
-    // BetweenFactor noise on consecutive moving frames.
-    double between_rot_sigma = 0.02;
-    double between_trans_sigma = 0.05;
-
-    // Tighter BetweenFactor noise when the relative measurement is identity
-    // (stationary frame): trusts the no-motion observation more.
-    double stationary_rot_sigma = 0.005;
-    double stationary_trans_sigma = 0.01;
-
-    // SmartProjectionPoseFactor settings.
-    double pixel_sigma = 1.0;              // pixel noise sigma
-    double rank_tolerance = 1e-5;
-    double outlier_threshold = 3.0;        // post-triangulation reprojection cutoff (px)
-
-    // Per-track admission filter: rejects tracks with too few observations
-    // or too little parallax to triangulate stably.
-    int min_observations = 4;
-    double min_bbox_diagonal = 25.0;       // pixel parallax floor
-
-    // Correction-publishing gates. Optimizations that fall below
-    // min_smart_factors or produce a jump larger than the caps are dropped.
-    int min_smart_factors = 50;
-    double max_correction_translation = 0.5;  // m
-    double max_correction_rotation_deg = 5.0;
-
-    // Run the optimisation inline on the caller's thread (deterministic: the
-    // correction is computed and applied at the same keyframe it was triggered,
-    // so there is no async latency / race and the lever arm shrinks to ~0).
-    // Default false keeps the background-thread path for real-time targets,
-    // where a synchronous solve would stall the frontend. Set 1 for reproducible
-    // offline evaluation.
-    bool synchronous = false;
-};
+// The LocalBundleAdjustment tunables (LBAParams) lived here. The GTSAM
+// windowed smoother they configured was removed with the rest of the old
+// backend: VINS owns windowed optimisation, marginalisation and outlier
+// rejection now, and is configured from its own yaml (see VinsBackend).
 
 struct OpticalFlowParams {
     int max_corners = 1000;
@@ -155,14 +109,11 @@ struct OdometryConfig {
     int keyframe_min_matches = 30;
 
     // Optional IMU layer (default ImuMode::Off = vision-only, unchanged).
-    ImuParams imu_params;
 
     int num_threads = 1;
     // Global debug toggle, set by YAML system.verbose or CLI --debug.
     bool verbose = false;
 
-    bool use_local_ba = false;
-    LBAParams lba_params;
 
     BucketingConfig bucketing_params;
 

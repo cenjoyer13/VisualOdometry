@@ -87,17 +87,44 @@ else()
 endif()
 
 # =========================================================================
-# GTSAM
+# Ceres — the VINS backend's solver.
+#
+# Replaces GTSAM, which went out with the LocalBundleAdjustment. That also
+# retires the EIGEN_DONT_VECTORIZE workaround's original justification (a
+# libgtsam.so built without -march=native); it is kept for now because the
+# vendored VINS tree has not been revalidated with Eigen vectorisation on, and
+# flipping both at once would make any resulting corruption ambiguous.
 # =========================================================================
-find_package(GTSAM REQUIRED)
-include_directories(${GTSAM_INCLUDE_DIR})
-
-# GTSAM's own lib dir usually isn't on the system loader path (it's a
-# hand-built install under claude-sandbox/, not a system package), so every
-# RPATH below that links gtsam also needs this appended — otherwise the
-# binary fails at launch with "libgtsam.so.4 => not found" unless
-# LD_LIBRARY_PATH is set manually first.
-get_filename_component(GTSAM_LIB_DIR "${GTSAM_INCLUDE_DIR}/../lib" ABSOLUTE)
+# Located by path rather than find_package(Ceres). The Ceres builds available
+# here live in conda envs whose CeresConfig.cmake chains find_dependency through
+# SuiteSparse -> METIS -> OpenMP, each expecting the conda toolchain's own
+# layout; resolving that against the system compiler is a long fight for no
+# benefit, since VINS needs nothing from Ceres but <ceres/ceres.h> and
+# libceres.so. Same pattern already used for ONNX Runtime and the ROS libs.
+set(CERES_DIR "" CACHE PATH "Root of a Ceres install (expects include/ceres/ceres.h, lib/libceres.so)")
+if(NOT CERES_DIR)
+    set(CERES_DIR "${ROS_ROOT}")   # the conda ROS envs here ship Ceres alongside ROS
+endif()
+find_path(CERES_INCLUDE_DIR ceres/ceres.h  PATHS ${CERES_DIR}/include NO_DEFAULT_PATH)
+find_library(CERES_LIB      ceres          PATHS ${CERES_DIR}/lib     NO_DEFAULT_PATH)
+# Ceres's public headers include glog unconditionally in these builds.
+find_path(GLOG_INCLUDE_DIR  glog/logging.h PATHS ${CERES_DIR}/include NO_DEFAULT_PATH)
+find_library(GLOG_LIB       glog           PATHS ${CERES_DIR}/lib     NO_DEFAULT_PATH)
+if(NOT CERES_INCLUDE_DIR OR NOT CERES_LIB)
+    message(FATAL_ERROR
+        "Ceres not found under ${CERES_DIR}. Pass -DCERES_DIR=<prefix> containing "
+        "include/ceres/ceres.h and lib/libceres.so.")
+endif()
+# glog >= 0.7 requires consumers to declare how they link it; without this its
+# headers hard-#error out. Ceres's public headers include glog unconditionally,
+# so every target that touches Ceres needs the define.
+find_path(EIGEN3_INCLUDE_DIR signature_of_eigen3_matrix_library
+          PATHS ${CERES_DIR}/include/eigen3 /usr/include/eigen3 /usr/local/include/eigen3)
+if(NOT EIGEN3_INCLUDE_DIR)
+    message(FATAL_ERROR "Eigen3 not found. Ceres headers include <Eigen/Core> unprefixed.")
+endif()
+message(STATUS "Ceres: ${CERES_LIB}")
+message(STATUS "Eigen3: ${EIGEN3_INCLUDE_DIR}")
 
 # =========================================================================
 # Odometry source library (shared by every executable target)
@@ -109,67 +136,53 @@ if(NOT USE_ONNX)
 endif()
 
 # =========================================================================
-# KittiEvaluator — portable (Linux + Windows).
-# Replays a KITTI sequence through the pipeline. No AirSim dependency.
+# Vendored VINS-Fusion backend (vins/).
+#
+# Copied from sendtooscar/VINS-Fusion-gpu with two deliberate deviations, both
+# documented at their sites: PCL and the lidar-depth path are stripped, and
+# utility/visualization.h is replaced by a headless stub. Everything else is
+# upstream verbatim so the tree stays diffable against VINS-Fusion.
+#
+# It is still ROS-coupled (Estimator holds a ros::NodeHandle), which is why only
+# the rosbag target can link it today. Stripping that is the prerequisite for
+# running the backend outside a bag.
 # =========================================================================
-add_executable(KittiEvaluator
-    main_test.cpp
-    ${SRC_ODOMETRY}
+file(GLOB_RECURSE SRC_VINS CONFIGURE_DEPENDS
+    "vins/vins_estimator/estimator/*.cpp"
+    "vins/vins_estimator/factor/*.cpp"
+    "vins/vins_estimator/initial/*.cpp"
+    "vins/vins_estimator/featureTracker/*.cpp"
+    "vins/vins_estimator/utility/*.cpp"
+    "vins/camera_models/src/*/*.cc"
+)
+set(VINS_INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/vins
+    ${CMAKE_CURRENT_SOURCE_DIR}/vins/camera_models/include
 )
 
-target_link_libraries(KittiEvaluator PRIVATE
-    ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIB}
-    gtsam
-    ${CMAKE_DL_LIBS}     # libdl on Unix, empty on Windows
-)
-
-if(UNIX)
-    # RPATH: lets the binary find libonnxruntime.so and the bundled cuda12_libs
-    # without LD_LIBRARY_PATH gymnastics. $ORIGIN/.. = repo root from build/.
-    # --disable-new-dtags: emit old-style DT_RPATH instead of DT_RUNPATH.
-    # DT_RUNPATH (the modern default) only resolves the *executable's own*
-    # direct NEEDED entries; libgtsam.so.4 itself needs libmetis-gtsam.so /
-    # libcephes-gtsam.so.1 from the same install dir, and as a grandchild
-    # dependency it's only found via the executable's path list if that path
-    # list is the (transitively-inherited) old-style RPATH.
-    set_target_properties(KittiEvaluator PROPERTIES
-        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        LINK_FLAGS "-Wl,--disable-new-dtags")
-endif()
+# Split the odometry sources: only the VIO pipeline needs the VINS backend
+# (and therefore Ceres + ROS). Frontend-only tools must not drag that in.
+set(SRC_ODOMETRY_VIO ${SRC_ODOMETRY})
+list(FILTER SRC_ODOMETRY_VIO INCLUDE REGEX "(OdometryPipeline|VinsBackend)\\.cpp$")
+list(FILTER SRC_ODOMETRY     EXCLUDE REGEX "(OdometryPipeline|VinsBackend)\\.cpp$")
 
 # =========================================================================
-# OdomLogEvaluator — portable (Linux + Windows).
-# Replays a bare folder of frame_NNNNNN.jpg images (no ground truth) through
-# the pipeline. Used for sanity-checking new captures that have no pose/PPK
-# source. No AirSim/ROS dependency.
+# KittiEvaluator / OdomLogEvaluator were dropped in the VINS switch.
+#
+# Both drove the pipeline through its old signature (build(config), a
+# ground-truth-scaled processFrame) and neither has an IMU stream, so neither
+# can feed a visual-inertial backend. main_odomlog.cpp is kept in the tree
+# unbuilt: the odometry_log captures it replays carry a ~20 Hz MAVLink RAW_IMU,
+# far below what preintegration needs, so reviving it is a separate exercise
+# from this milestone. main_test.cpp (KITTI) was deleted outright.
 # =========================================================================
-add_executable(OdomLogEvaluator
-    main_odomlog.cpp
-    ${SRC_ODOMETRY}
-)
-
-target_link_libraries(OdomLogEvaluator PRIVATE
-    ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIB}
-    gtsam
-    ${CMAKE_DL_LIBS}
-)
-
-if(UNIX)
-    set_target_properties(OdomLogEvaluator PROPERTIES
-        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        LINK_FLAGS "-Wl,--disable-new-dtags")
-endif()
 
 # =========================================================================
 # MatchDebugger — portable (Linux + Windows).
 # Runs detector + matcher on frame pairs from an image folder and writes
 # annotated PNGs (both frames side-by-side, matches drawn as lines, RANSAC
-# inlier/outlier colouring). Frontend-only sanity check: no pipeline, no pose
-# estimation, no ground truth.
+# inlier/outlier colouring). Frontend-only: no pipeline, no backend, no GT,
+# which is why it links neither Ceres nor ROS.
 # =========================================================================
 add_executable(MatchDebugger
     main_matchdebug.cpp
@@ -179,13 +192,12 @@ add_executable(MatchDebugger
 target_link_libraries(MatchDebugger PRIVATE
     ${OpenCV_LIBS}
     ${ONNXRUNTIME_LIB}
-    gtsam
     ${CMAKE_DL_LIBS}
 )
 
 if(UNIX)
     set_target_properties(MatchDebugger PROPERTIES
-        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
+        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs"
         BUILD_WITH_INSTALL_RPATH TRUE
         LINK_FLAGS "-Wl,--disable-new-dtags")
 endif()
@@ -206,6 +218,14 @@ if(UNIX AND ROS_ROOT)
     find_library(ROSTIME_LIB          rostime                PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
     find_library(ROSCONSOLE_LIB       rosconsole             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
     find_library(CPP_COMMON_LIB       cpp_common             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    # roscpp + tf are needed by the vendored VINS estimator, not by bag reading:
+    # its Estimator holds a ros::NodeHandle and estimator.h includes
+    # tf/transform_listener.h. Both go away when the backend is de-ROSed.
+    find_library(ROSCPP_LIB           roscpp                 PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(TF_LIB               tf                     PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(TF2_LIB              tf2                    PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(TF2_ROS_LIB          tf2_ros                PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    find_library(XMLRPCPP_LIB         xmlrpcpp               PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
 
     if(ROSBAG_LIB AND ROSBAG_STORAGE_LIB AND ROSCPP_SER_LIB AND ROSTIME_LIB)
         message(STATUS "ROS integration enabled — building RosbagEvaluator.")
@@ -214,12 +234,29 @@ if(UNIX AND ROS_ROOT)
         add_executable(RosbagEvaluator
             main_rosbag.cpp
             ${SRC_ODOMETRY}
+            ${SRC_ODOMETRY_VIO}
+            ${SRC_VINS}
         )
-        target_include_directories(RosbagEvaluator PRIVATE ${ROS_ROOT}/include)
+        target_include_directories(RosbagEvaluator PRIVATE
+            ${ROS_ROOT}/include
+            ${VINS_INCLUDE_DIRS}
+            ${CERES_INCLUDE_DIR}
+            ${GLOG_INCLUDE_DIR}
+            ${EIGEN3_INCLUDE_DIR}
+        )
+        # VINS includes <eigen3/Eigen/...>, Ceres includes <Eigen/...>; the
+        # eigen3 dir above satisfies the latter and its parent the former.
+        target_compile_definitions(RosbagEvaluator PRIVATE GLOG_USE_GLOG_EXPORT)
         target_link_libraries(RosbagEvaluator PRIVATE
             ${OpenCV_LIBS}
             ${ONNXRUNTIME_LIB}
-            gtsam
+            ${CERES_LIB}
+            ${GLOG_LIB}
+            ${ROSCPP_LIB}
+            ${TF_LIB}
+            ${TF2_LIB}
+            ${TF2_ROS_LIB}
+            ${XMLRPCPP_LIB}
             ${ROSBAG_LIB}
             ${ROSBAG_STORAGE_LIB}
             ${ROSCPP_SER_LIB}
@@ -231,7 +268,7 @@ if(UNIX AND ROS_ROOT)
         # RPATH so the binary can find both ONNX RT / cuDNN AND the ROS libs
         # without LD_LIBRARY_PATH gymnastics.
         set_target_properties(RosbagEvaluator PROPERTIES
-            INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${ROS_ROOT}/lib:${GTSAM_LIB_DIR}"
+            INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${ROS_ROOT}/lib:${CERES_DIR}/lib"
             BUILD_WITH_INSTALL_RPATH TRUE
             LINK_FLAGS "-Wl,--disable-new-dtags")
     else()
@@ -244,85 +281,8 @@ else()
 endif()
 
 # =========================================================================
-# AirSim-dependent targets: PathRecorder + PathPlayer + FreeplayDrone.
-#
-# All three use Win32 APIs (GetAsyncKeyState, VK_* constants) and AirSim
-# RPC. They are gated on (WIN32 AND AIRSIM_*). Configure with:
-#   cmake -DAIRSIM_ROOT=C:/path/to/AirSim ...
-# or set AIRSIM_INCLUDE_DIRS / AIRSIM_LIBS directly to override defaults.
+# The AirSim targets (PathRecorder / PathPlayer / FreeplayDrone) and their
+# core/ worker were removed. All three were Win32-only, all three drove the
+# old ground-truth-scaled pipeline, and AirSim was already deprecated as a
+# host in favour of recorded-bag replay.
 # =========================================================================
-set(AIRSIM_ROOT "" CACHE PATH "Path to AirSim repository root")
-set(AIRSIM_INCLUDE_DIRS "" CACHE STRING "Explicit AirSim include dirs (overrides AIRSIM_ROOT defaults)")
-set(AIRSIM_LIBS "" CACHE STRING "Explicit AirSim libraries (e.g. AirLib;rpc)")
-
-if(AIRSIM_ROOT AND NOT AIRSIM_INCLUDE_DIRS)
-    set(AIRSIM_INCLUDE_DIRS
-        ${AIRSIM_ROOT}/AirLib/include
-        ${AIRSIM_ROOT}/AirLib/deps/rpclib/include
-        ${AIRSIM_ROOT}/AirLib/deps/eigen3
-        ${AIRSIM_ROOT}/MavLinkCom/include
-    )
-endif()
-
-if(AIRSIM_ROOT AND NOT AIRSIM_LIBS)
-    find_library(AIRSIM_AIRLIB_LIB AirLib
-        PATHS ${AIRSIM_ROOT}/AirLib/lib ${AIRSIM_ROOT}/build_release/output/lib
-        NO_DEFAULT_PATH)
-    find_library(AIRSIM_RPC_LIB rpc
-        PATHS ${AIRSIM_ROOT}/external/rpclib/rpc-2.3.0/build
-              ${AIRSIM_ROOT}/AirLib/deps/rpclib/lib
-              ${AIRSIM_ROOT}/build_release/output/lib
-        NO_DEFAULT_PATH)
-    if(AIRSIM_AIRLIB_LIB AND AIRSIM_RPC_LIB)
-        set(AIRSIM_LIBS ${AIRSIM_AIRLIB_LIB} ${AIRSIM_RPC_LIB})
-    endif()
-endif()
-
-if(WIN32 AND AIRSIM_INCLUDE_DIRS AND AIRSIM_LIBS)
-    message(STATUS "AirSim integration enabled — building PathRecorder, PathPlayer, FreeplayDrone.")
-    message(STATUS "  Includes: ${AIRSIM_INCLUDE_DIRS}")
-    message(STATUS "  Libs:     ${AIRSIM_LIBS}")
-
-    # ----- PathRecorder: WASD flight in AirSim, logs GT trajectory CSV -----
-    add_executable(PathRecorder main_recorder.cpp)
-    target_include_directories(PathRecorder PRIVATE ${AIRSIM_INCLUDE_DIRS})
-    target_link_libraries(PathRecorder PRIVATE
-        ${OpenCV_LIBS}
-        ${AIRSIM_LIBS}
-    )
-
-    # ----- PathPlayer: replays a CSV trajectory with the odometry pipeline -----
-    add_executable(PathPlayer
-        main_player.cpp
-        ${SRC_ODOMETRY}
-    )
-    target_include_directories(PathPlayer PRIVATE ${AIRSIM_INCLUDE_DIRS})
-    target_link_libraries(PathPlayer PRIVATE
-        ${OpenCV_LIBS}
-        ${ONNXRUNTIME_LIB}
-        gtsam
-        ${AIRSIM_LIBS}
-        ${CMAKE_DL_LIBS}
-    )
-
-    # ----- FreeplayDrone: interactive WASD flight + live odometry + CSV log -----
-    add_executable(FreeplayDrone
-        main.cpp
-        core/DroneWorker.cpp
-        ${SRC_ODOMETRY}
-    )
-    target_include_directories(FreeplayDrone PRIVATE ${AIRSIM_INCLUDE_DIRS})
-    target_link_libraries(FreeplayDrone PRIVATE
-        ${OpenCV_LIBS}
-        ${ONNXRUNTIME_LIB}
-        gtsam
-        ${AIRSIM_LIBS}
-        ${CMAKE_DL_LIBS}
-    )
-else()
-    if(NOT WIN32)
-        message(STATUS "AirSim targets skipped: PathRecorder / PathPlayer / FreeplayDrone are Win32-only.")
-    else()
-        message(STATUS "AirSim targets skipped: pass -DAIRSIM_ROOT=<repo root> to enable.")
-    endif()
-endif()

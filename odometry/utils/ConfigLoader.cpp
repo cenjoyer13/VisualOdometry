@@ -81,41 +81,9 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
         if (!kf["min_matches"].empty()) out.keyframe_min_matches = (int)kf["min_matches"];
     }
 
-    // Optional IMU block. Absent (or mode != gyro/vio) leaves the vision-only
-    // path untouched.
-    cv::FileNode imu = fs["imu"];
-    if (!imu.empty()) {
-        if (!imu["mode"].empty()) {
-            std::string m = readStr(imu["mode"]);
-            if (m == "gyro")     out.imu_params.mode = ImuMode::Gyro;
-            else if (m == "vio") out.imu_params.mode = ImuMode::Vio;
-            else                 out.imu_params.mode = ImuMode::Off;
-        }
-        if (!imu["topic"].empty())  out.imu_params.topic  = readStr(imu["topic"]);
-        if (!imu["acc_n"].empty())  out.imu_params.acc_n  = (double)imu["acc_n"];
-        if (!imu["gyr_n"].empty())  out.imu_params.gyr_n  = (double)imu["gyr_n"];
-        if (!imu["acc_w"].empty())  out.imu_params.acc_w  = (double)imu["acc_w"];
-        if (!imu["gyr_w"].empty())  out.imu_params.gyr_w  = (double)imu["gyr_w"];
-        if (!imu["g_norm"].empty()) out.imu_params.g_norm = (double)imu["g_norm"];
-        if (!imu["td"].empty())     out.imu_params.td     = (double)imu["td"];
-        if (!imu["init"].empty())   out.imu_params.init   = readStr(imu["init"]);
-        if (!imu["gyro_rot_sigma"].empty()) out.imu_params.gyro_rot_sigma = (double)imu["gyro_rot_sigma"];
-
-        // IMU-camera extrinsic: R_cam_imu = rotation(body_T_cam0)^T, so IMU-frame
-        // angular velocity can be expressed in the camera/VO frame. Without it the
-        // gyro prior would constrain the wrong axes.
-        cv::FileNode ext = fs["body_T_cam0"];
-        if (!ext.empty()) {
-            cv::Mat T; ext >> T;
-            if (T.rows == 4 && T.cols == 4) {
-                cv::Mat Rt; T(cv::Rect(0, 0, 3, 3)).convertTo(Rt, CV_64F);
-                cv::Mat Rci = Rt.t();
-                for (int r = 0; r < 3; ++r)
-                    for (int c = 0; c < 3; ++c)
-                        out.imu_params.R_cam_imu(r, c) = Rci.at<double>(r, c);
-            }
-        }
-    }
+    // `imu:` is likewise accepted-and-ignored. Noise densities, td and the
+    // camera-IMU extrinsic are read by VINS from its own yaml so there is
+    // exactly one place they can disagree: none.
 
     // Detector params (per-type block under detector.<type>)
     cv::FileNode d_node = fs["detector"][out.detector_type];
@@ -161,39 +129,10 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
         out.bucketing_params.max_features_per_bucket = (int)b_node["max_features_per_bucket"];
     }
 
-    // Local bundle adjustment. Only `enabled` is gated; the rest of the
-    // sub-keys are overlaid onto the LBAParams defaults if present.
-    cv::FileNode lba_node = fs["local_bundle_adjustment"];
-    if (!lba_node.empty()) {
-        out.use_local_ba = (int)lba_node["enabled"] != 0;
-
-        LBAParams& lp = out.lba_params;
-        auto readD = [&](const char* k, double& dst) {
-            if (!lba_node[k].empty()) dst = (double)lba_node[k];
-        };
-        auto readI = [&](const char* k, int& dst) {
-            if (!lba_node[k].empty()) dst = (int)lba_node[k];
-        };
-
-        readI("window_size",                lp.window_size);
-        readI("opt_stride",                 lp.opt_stride);
-        readD("anchor_prior_sigma",         lp.anchor_prior_sigma);
-        readD("end_prior_rot_sigma",        lp.end_prior_rot_sigma);
-        readD("end_prior_trans_sigma",      lp.end_prior_trans_sigma);
-        readD("between_rot_sigma",          lp.between_rot_sigma);
-        readD("between_trans_sigma",        lp.between_trans_sigma);
-        readD("stationary_rot_sigma",       lp.stationary_rot_sigma);
-        readD("stationary_trans_sigma",     lp.stationary_trans_sigma);
-        readD("pixel_sigma",                lp.pixel_sigma);
-        readD("rank_tolerance",             lp.rank_tolerance);
-        readD("outlier_threshold",          lp.outlier_threshold);
-        readI("min_observations",           lp.min_observations);
-        readD("min_bbox_diagonal",          lp.min_bbox_diagonal);
-        readI("min_smart_factors",          lp.min_smart_factors);
-        readD("max_correction_translation", lp.max_correction_translation);
-        readD("max_correction_rotation_deg",lp.max_correction_rotation_deg);
-        if (!lba_node["synchronous"].empty()) lp.synchronous = (int)lba_node["synchronous"] != 0;
-    }
+    // `local_bundle_adjustment:` is accepted-and-ignored: the GTSAM smoother
+    // it configured was removed. VINS does windowed optimisation and reads its
+    // tuning from its own yaml, pointed at by `vins_config`. Left unparsed so
+    // existing configs still load instead of erroring on an unknown key.
 
     // System (threads + backend + verbose)
     cv::FileNode sys_node = fs["system"];
@@ -306,6 +245,9 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     if (!n["start_time"].empty()) out.start_time = (double)n["start_time"];
     if (!n["end_time"].empty())   out.end_time   = (double)n["end_time"];
     if (!n["altimeter_scale"].empty()) out.altimeter_scale = ((int)n["altimeter_scale"] != 0);
+    // Top-level rather than under rosbag:, because it configures the estimator
+    // rather than the data source.
+    if (!fs["vins_config"].empty()) out.vins_config = readStr(fs["vins_config"]);
 
     // cam0->body extrinsic (top-level opencv-matrix). Left empty when absent,
     // which the evaluator treats as identity.

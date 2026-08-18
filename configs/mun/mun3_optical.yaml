@@ -1,5 +1,11 @@
 %YAML:1.0
 
+# Backend configuration: camera-IMU extrinsic, IMU noise densities, td and the
+# solver limits all live in the VINS yaml, which is the single source of truth
+# for anything the estimator consumes. Path is relative to the process CWD
+# (run from build/).
+vins_config: ../configs/vins/mun3_nadir.yaml
+
 visualizer:
     scale: 0.2      # px-per-metre zoom of the 2D trajectory window
 
@@ -25,26 +31,6 @@ bucketing:
   grid_rows: 6
   max_features_per_bucket: 30
 
-local_bundle_adjustment:
-  enabled: 1
-  window_size: 15
-  opt_stride: 2
-  anchor_prior_sigma: 1e-4
-  end_prior_rot_sigma: 0.03
-  end_prior_trans_sigma: 3.0
-  between_rot_sigma: 0.03
-  between_trans_sigma: 1.5
-  stationary_rot_sigma: 0.03
-  stationary_trans_sigma: 1.5
-  pixel_sigma: 2.0
-  rank_tolerance: 1.0e-5
-  outlier_threshold: 4.0
-  min_observations: 5
-  min_bbox_diagonal: 30.0
-  min_smart_factors: 50
-  max_correction_translation: 5.0
-  max_correction_rotation_deg: 5.0
-
 body_T_cam0: !!opencv-matrix
   rows: 4
   cols: 4
@@ -67,9 +53,6 @@ camera:
   mv:  829.454
   u0:  833.937
   v0:  562.509
-
-pose_estimator:
-  type: Homography
 
 system:
   backend: CPU
