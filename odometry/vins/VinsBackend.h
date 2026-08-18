@@ -87,10 +87,12 @@ public:
 private:
     std::unique_ptr<Estimator> est_;
 
-    // Feed diagnostics (see addFrame). dbg_every_ = 0 disables.
-    int dbg_every_ = 25;
-    long dbg_frames_ = 0;
-    double dbg_prev_t_ = -1.0;
+    // Emits the {"type":"state"} record after each accepted frame.
+    void logState(double solve_ms);
+
+    // Feed bookkeeping: previous accepted frame's ids (for the carry-over
+    // fraction) and its timestamp (for the achieved feed rate).
+    double last_logged_t_ = -1.0;
     // Feed-rate throttle: max frames/second handed to the backend, taken from
     // the vins yaml's `freq`. 0 disables. See addFrame for why it matters.
     double feed_hz_ = 0.0;

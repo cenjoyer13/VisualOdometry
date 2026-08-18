@@ -3,9 +3,11 @@
 #include <iostream>
 #include <map>
 #include <utility>
+#include <chrono>
 
 #include "../../vins/vins_estimator/estimator/estimator.h"
 #include "../../vins/vins_estimator/estimator/parameters.h"
+#include "../utils/RunLog.h"
 
 VinsBackend::VinsBackend(const std::string& vins_config) {
     // Order matters and is inherited from rosNodeTest.cpp: readParameters()
@@ -30,6 +32,23 @@ VinsBackend::VinsBackend(const std::string& vins_config) {
         cv::FileStorage fs(vins_config, cv::FileStorage::READ);
         if (fs.isOpened() && !fs["freq"].empty()) feed_hz_ = (double)fs["freq"];
     }
+    // The backend's own resolved settings, as a run-scoped record. These are
+    // the knobs that silently change results: SOLVER_TIME is a WALL-CLOCK
+    // budget, so a small value makes the estimator nondeterministic; MAX_CNT is
+    // the feature density the whole backend is tuned around; and TD /
+    // ESTIMATE_TD decide whether the zero feature velocities we send are exact
+    // or merely tolerated.
+    LogRec("run.vins", /*stamp_frame=*/false)
+        ("max_solver_time", SOLVER_TIME)
+        ("max_num_iterations", NUM_ITERATIONS)
+        ("max_cnt", MAX_CNT)
+        ("min_parallax", MIN_PARALLAX)
+        ("td", TD)
+        ("estimate_td", ESTIMATE_TD)
+        ("num_of_cam", NUM_OF_CAM)
+        ("multiple_thread", MULTIPLE_THREAD)
+        ("feed_hz", feed_hz_);
+
     std::cout << "[VinsBackend] VINS estimator ready (" << vins_config
               << "), feed throttle " << feed_hz_ << " Hz\n";
 }
@@ -59,7 +78,10 @@ void VinsBackend::addFrame(double t,
     // exactly what this bag produced at the full ~16 Hz rate.
     if (feed_hz_ > 0.0) {
         const double min_dt = 1.0 / feed_hz_;
-        if (last_fed_t_ > 0.0 && (t - last_fed_t_) < min_dt * 0.99) return;
+        if (last_fed_t_ > 0.0 && (t - last_fed_t_) < min_dt * 0.99) {
+            LogRec("feed")("accepted", false)("n_feat", (int)ids.size());
+            return;
+        }
         last_fed_t_ = t;
     }
 
@@ -81,30 +103,65 @@ void VinsBackend::addFrame(double t,
         featureFrame[static_cast<int>(ids[i])].emplace_back(0, xyz_uv_velocity);
     }
 
-    // Feed diagnostics. VINS's initialiser fails on two distinct conditions
+    // Feed record. VINS's initialiser fails on two distinct conditions
     // ("Not enough features or parallax" from relativePose, "IMU excitation not
     // enouth" from initialStructure) and telling them apart needs to know what
-    // the frontend is actually delivering: the image rate we feed at, how many
+    // the frontend is actually delivering: the rate we feed at, how many
     // features per frame, and -- the one that matters most -- how many track
     // ids survive between consecutive frames. Short tracks starve
     // getCorresponding() of shared observations across the window no matter how
     // many features each individual frame carries.
-    if (dbg_every_ > 0 && (++dbg_frames_ % dbg_every_) == 0) {
-        size_t carried = 0;
-        for (size_t i = 0; i < n; ++i)
-            if (prev_ids_.count(ids[i])) ++carried;
-        const double dt = (dbg_prev_t_ > 0.0) ? (t - dbg_prev_t_) : 0.0;
-        std::cout << "[VinsBackend] frame " << dbg_frames_
-                  << "  dt=" << dt << "s"
-                  << "  feats=" << n
-                  << "  carried=" << carried
-                  << " (" << (n ? 100.0 * carried / n : 0.0) << "%)\n";
-    }
-    dbg_prev_t_ = t;
+    //
+    // All three of the feed bugs found so far (10x feature count, 2x feed rate,
+    // and the tracks themselves) were diagnosed from exactly these numbers.
+    size_t carried = 0;
+    for (size_t i = 0; i < n; ++i)
+        if (prev_ids_.count(ids[i])) ++carried;
+    LogRec("feed")
+        ("accepted", true)
+        ("dt", (last_logged_t_ > 0.0) ? (t - last_logged_t_) : 0.0)
+        ("n_feat", (int)n)
+        ("n_carried", (int)carried)
+        ("carry", n ? double(carried) / double(n) : 0.0);
+    last_logged_t_ = t;
+
     prev_ids_.clear();
     for (size_t i = 0; i < n; ++i) prev_ids_.insert(ids[i]);
 
+    const auto t0 = std::chrono::steady_clock::now();
     est_->inputFeature(t, featureFrame);
+    const double solve_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t0).count();
+
+    logState(solve_ms);
+}
+
+void VinsBackend::logState(double solve_ms) {
+    if (!RunLog::instance().enabled()) return;
+
+    const bool init = isInitialized();
+    LogRec r("state");
+    r("solver_flag", init ? "NON_LINEAR" : "INITIAL")
+     ("solve_ms", solve_ms)
+     ("frame_count", est_->frame_count)
+     ("marg", est_->marginalization_flag == Estimator::MarginalizationFlag::MARGIN_OLD
+                  ? "OLD" : "NEW");
+    if (!init) return;
+
+    const int i = est_->frame_count;
+    const double p[3]  = {est_->Ps[i](0),  est_->Ps[i](1),  est_->Ps[i](2)};
+    const double v[3]  = {est_->Vs[i](0),  est_->Vs[i](1),  est_->Vs[i](2)};
+    const double ba[3] = {est_->Bas[i](0), est_->Bas[i](1), est_->Bas[i](2)};
+    const double bg[3] = {est_->Bgs[i](0), est_->Bgs[i](1), est_->Bgs[i](2)};
+    const double g[3]  = {est_->g(0), est_->g(1), est_->g(2)};
+    const Eigen::Quaterniond q(est_->Rs[i]);
+    const double qv[4] = {q.x(), q.y(), q.z(), q.w()};
+
+    r.vec("p", p, 3).vec("v", v, 3).vec("q", qv, 4)
+     .vec("ba", ba, 3).vec("bg", bg, 3).vec("g", g, 3)
+     ("v_norm", est_->Vs[i].norm())
+     ("ba_norm", est_->Bas[i].norm())
+     ("bg_norm", est_->Bgs[i].norm());
 }
 
 bool VinsBackend::isInitialized() const {

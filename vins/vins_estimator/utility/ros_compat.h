@@ -35,23 +35,31 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <iostream>
+#include <sstream>
+#include <string>
 
+// Declared, not included: the vendored tree stays free of this project's
+// headers. Defined in odometry/utils/RunLog.cpp, which prints to stderr AND
+// emits a {"type":"vins",...} record into the structured run log, stamped with
+// the frame being processed.
+//
+// This is why the de-ROS pass pays off twice. Every diagnostic VINS emits --
+// including the initialisation failure reasons at estimator.cpp:498/548/576/661
+// and the Ceres iteration count at :1071 -- already flows through these macros,
+// so routing them here captures the backend's entire diagnostic surface with no
+// further edits to upstream sources.
 namespace vins_log {
-// Single funnel, so redirecting or silencing the backend is a one-line change.
-inline std::ostream& stream() { return std::cerr; }
+void logf(const char* level, const char* fmt, ...);
+void logs(const char* level, const std::string& text);
 }  // namespace vins_log
 
-#define VINS_LOG_PRINTF(level, ...)                    \
-    do {                                               \
-        std::fprintf(stderr, "[" level "] ");          \
-        std::fprintf(stderr, __VA_ARGS__);             \
-        std::fprintf(stderr, "\n");                    \
-    } while (0)
+#define VINS_LOG_PRINTF(level, ...) vins_log::logf(level, __VA_ARGS__)
 
-#define VINS_LOG_STREAM(level, expr)                                   \
-    do {                                                               \
-        vins_log::stream() << "[" level "] " << expr << std::endl;     \
+#define VINS_LOG_STREAM(level, expr)                   \
+    do {                                               \
+        std::ostringstream _vins_ss;                   \
+        _vins_ss << expr;                              \
+        vins_log::logs(level, _vins_ss.str());         \
     } while (0)
 
 #define ROS_INFO(...)  VINS_LOG_PRINTF("INFO", __VA_ARGS__)

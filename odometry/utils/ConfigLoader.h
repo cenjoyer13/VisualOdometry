@@ -59,6 +59,10 @@ struct RosbagConfig {
     // extrinsic, IMU noise densities, td, solver limits). Relative to the
     // process CWD. Required: there is no estimator without it.
     std::string vins_config;
+    // Structured run log (see odometry/utils/RunLog.h). Empty dir disables it.
+    std::string log_dir;
+    std::string log_level = "info";   // off | info | debug | trace
+    int log_frame_stride = 1;
 };
 
 // Wraps an OpenCV FileStorage handle and converts a YAML config file into an

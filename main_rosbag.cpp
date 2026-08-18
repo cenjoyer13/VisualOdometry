@@ -30,6 +30,7 @@
 #endif
 #include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
+#include "odometry/utils/RunLog.h"
 
 // NED roll/pitch/yaw (degrees) to 3x3 rotation matrix (double). Standard
 // aerospace body-to-NED sequence R = Rz(yaw) * Ry(pitch) * Rx(roll); this is
@@ -332,6 +333,37 @@ int main(int argc, char** argv) {
                      "IMU noise densities, td). There is no estimator without it.\n";
         return -1;
     }
+    // Open the structured log BEFORE the backend is built, so VINS's own
+    // start-up diagnostics (extrinsic, gravity, td, thread mode) are captured
+    // through the ros_compat tee rather than only reaching stderr.
+    if (!bag_cfg.log_dir.empty()) {
+        RunLog& L = RunLog::instance();
+        L.open(bag_cfg.log_dir, RunLog::parseLevel(bag_cfg.log_level));
+        L.setFrameStride(bag_cfg.log_frame_stride);
+
+        LogRec m("run.meta", /*stamp_frame=*/false);
+        m("v", 1)
+#ifdef VINS_GIT_REV
+         ("git", VINS_GIT_REV)
+#endif
+         ("built", std::string(__DATE__ " " __TIME__))
+         ("config", yaml_file)
+         ("config_hash", RunLog::fileHash(yaml_file))
+         ("vins_config", bag_cfg.vins_config)
+         ("vins_config_hash", RunLog::fileHash(bag_cfg.vins_config))
+         ("bag", bag_cfg.bag_path)
+         ("start_time", bag_cfg.start_time)
+         ("end_time", bag_cfg.end_time)
+         ("frontend", config.frontend_type)
+         ("max_corners", config.optical_flow_params.max_corners)
+         ("min_distance", config.optical_flow_params.min_distance)
+         ("bucketing", config.bucketing_params.enabled)
+         ("fx", (double)config.intrinsics.fx)
+         ("fy", (double)config.intrinsics.fy)
+         ("cx", (double)config.intrinsics.cx)
+         ("cy", (double)config.intrinsics.cy);
+    }
+
     auto pipeline = OdometryPipeline::build(config, bag_cfg.vins_config);
 
     std::ofstream log_file(out_path);
@@ -471,6 +503,15 @@ int main(int argc, char** argv) {
         if (bag_cfg.altimeter_scale)
             current_gt.altitude = (float)(cur_alt - baseline_agl);
 
+        // Frame context for every record emitted while this frame is processed,
+        // including the ones VINS raises from inside the solve.
+        RunLog::instance().setFrame(frame_id, frame_time);
+        {
+            const double gp[3] = {current_gt.position[0], current_gt.position[1],
+                                  current_gt.position[2]};
+            LogRec("gt").vec("p", gp, 3)("agl", (double)current_gt.altitude);
+        }
+
         DeviceBuffer frame_buffer(frame);
         pipeline->processFrame(frame_buffer, current_gt, frame_time);
 
@@ -554,6 +595,7 @@ int main(int argc, char** argv) {
     bag.close();
     printf("\n");
     log_file.close();
+    RunLog::instance().close();
     std::cout << "[EVALUATOR] Complete. Trajectory saved to " << out_path << "\n";
     return 0;
 }

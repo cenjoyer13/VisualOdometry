@@ -130,6 +130,17 @@ endif()
 message(STATUS "Ceres: ${CERES_LIB}")
 message(STATUS "Eigen3: ${EIGEN3_INCLUDE_DIR}")
 
+# Stamp the build with the git revision so run.meta can tie a result back to
+# the exact tree that produced it. "unknown" outside a checkout.
+execute_process(COMMAND git rev-parse --short HEAD
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                OUTPUT_VARIABLE GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET)
+if(NOT GIT_REV)
+    set(GIT_REV "unknown")
+endif()
+add_compile_definitions(VINS_GIT_REV="${GIT_REV}")
+
 # =========================================================================
 # Odometry source library (shared by every executable target)
 # =========================================================================

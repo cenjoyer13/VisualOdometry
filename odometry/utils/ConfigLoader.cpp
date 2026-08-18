@@ -243,6 +243,13 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     // rather than the data source.
     if (!fs["vins_config"].empty()) out.vins_config = readStr(fs["vins_config"]);
 
+    cv::FileNode lg = fs["logging"];
+    if (!lg.empty()) {
+        if (!lg["dir"].empty())          out.log_dir   = readStr(lg["dir"]);
+        if (!lg["level"].empty())        out.log_level = readStr(lg["level"]);
+        if (!lg["frame_stride"].empty()) out.log_frame_stride = (int)lg["frame_stride"];
+    }
+
     // cam0->body extrinsic (top-level opencv-matrix). Left empty when absent,
     // which the evaluator treats as identity.
     cv::FileNode ext = fs["body_T_cam0"];
