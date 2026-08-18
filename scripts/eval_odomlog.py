@@ -66,7 +66,7 @@ def compare(vo, gt):
 def avg_fps(log_path):
     if not log_path or not os.path.exists(log_path):
         return ''
-    vals = [float(x) for x in re.findall(r'FPS:([0-9.]+)', open(log_path, errors='ignore').read())]
+    vals = [float(x) for x in re.findall(r'FPS:\s*([0-9.]+)', open(log_path, errors='ignore').read())]
     vals = [v for v in vals if v > 0]
     return round(sum(vals) / len(vals), 2) if vals else ''
 

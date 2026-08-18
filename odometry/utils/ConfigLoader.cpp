@@ -263,6 +263,14 @@ bool ConfigLoader::loadImageSequenceConfig(ImageSequenceConfig& out) {
     if (!al.empty() && !al["init_distance"].empty())
         out.aligner_init_distance = (double)al["init_distance"];
 
+    // Deployment-mode heading seed. Overrides the GT aligner when `path` is set.
+    cv::FileNode hs = fs["heading_source"];
+    if (!hs.empty()) {
+        if (!hs["path"].empty()) out.heading_file = readStr(hs["path"]);
+        if (!hs["mount_yaw_offset"].empty())
+            out.heading_mount_offset = (double)hs["mount_yaw_offset"];
+    }
+
     cv::FileNode flip = fs["trajectory_flip"];
     if (!flip.empty()) {
         if (!flip["x"].empty()) out.traj_sign[0] = (double)flip["x"];

@@ -165,6 +165,32 @@ if(UNIX)
 endif()
 
 # =========================================================================
+# MatchDebugger — portable (Linux + Windows).
+# Runs detector + matcher on frame pairs from an image folder and writes
+# annotated PNGs (both frames side-by-side, matches drawn as lines, RANSAC
+# inlier/outlier colouring). Frontend-only sanity check: no pipeline, no pose
+# estimation, no ground truth.
+# =========================================================================
+add_executable(MatchDebugger
+    main_matchdebug.cpp
+    ${SRC_ODOMETRY}
+)
+
+target_link_libraries(MatchDebugger PRIVATE
+    ${OpenCV_LIBS}
+    ${ONNXRUNTIME_LIB}
+    gtsam
+    ${CMAKE_DL_LIBS}
+)
+
+if(UNIX)
+    set_target_properties(MatchDebugger PROPERTIES
+        INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib:${CMAKE_CURRENT_SOURCE_DIR}/cuda12_libs:${GTSAM_LIB_DIR}"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        LINK_FLAGS "-Wl,--disable-new-dtags")
+endif()
+
+# =========================================================================
 # RosbagEvaluator — Linux-only, opt-in via -DROS_ROOT=<ROS Noetic install>.
 #
 # Replays a ROS1 bag through the odometry pipeline. Mirrors KittiEvaluator's

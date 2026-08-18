@@ -1,0 +1,92 @@
+%YAML:1.0
+
+# run6 (nadir imgs0), NO-BUCKETING variant, SuperPoint + brute-force (Kinematic)
+# matching. Same dataset / GT / camera / pose settings as run6_optical.yaml --
+# only the frontend differs, so the two are directly comparable. No
+# `frontend:` key => the descriptor frontend (detector + matcher).
+#
+# SuperPoint runs through ONNX Runtime; system.backend: CUDA uses its CUDA EP.
+# Drop to CPU if the GPU path is unavailable. Run from build/ so the hard-coded
+# ../models/*.onnx paths resolve.
+
+# 2D trajectory window zoom, px per metre. 0.4 = 0.8x the 0.5 default, to fit
+# run6's larger trajectory into the debug window.
+visualizer:
+  scale: 0.4
+
+image_sequence:
+  path: ../../../VO-datasets/odometry_log/run6/imgs0
+  times_file: ../../../VO-datasets/odometry_log/run6/cam0_times.txt
+  ground_truth_file: ../../../VO-datasets/odometry_log/run6/GLOBAL_POSITION_INT_log.csv
+  start_time: 600.0
+  end_time: 900.0
+
+detector:
+  type: SuperPoint
+
+# Kinematic = brute-force BF + ratio test + pixel-jump gate.
+matcher:
+  type: Kinematic
+  distance_ratio: 0.75
+
+bucketing:
+  enabled: 0
+  grid_cols: 8
+  grid_rows: 6
+  max_features_per_bucket: 30
+
+scale_estimator:
+  type: AirSim
+
+local_bundle_adjustment:
+  enabled: 0
+
+# Actual Kannala-Brandt fisheye intrinsics for this camera. The model owns
+# undistortion and hands the pipeline the rectified pinhole intrinsics.
+camera:
+  model_type: "KannalaBrandtCamera"
+  scale_factor: 1.0
+  image_width: 1280
+  image_height: 720
+  k2:  0.04620145
+  k3: -0.03831710
+  k4:  0.02262017
+  k5: -0.01124080
+  mu:  549.30287
+  mv:  559.17020
+  u0:  613.57787
+  v0:  383.53130
+
+# Nadir, near-planar scene -> Homography (Essential degenerates on a plane).
+# Keep the value on its own line: OpenCV's YAML parser does NOT strip trailing
+# inline comments from string values, so "Homography  # ..." is read literally
+# and silently falls back to the Essential estimator.
+pose_estimator:
+  type: Homography
+
+# The nadir mount's image-down axis makes the VO trajectory a mirror of the ENU
+# GT -- a reflection the yaw aligner cannot undo. Flip ONE horizontal axis;
+# x and y are equivalent here since the aligner re-solves heading afterward.
+trajectory_flip:
+  y: -1.0
+
+# cam0->body extrinsic for the nadir mount, same key/handling as the mun rosbag
+# configs. Seeded with the mun Bell412 nadir mount (Rz(~90deg) + small tilt);
+# replace with run6's own calibration if it differs.
+body_T_cam0: !!opencv-matrix
+  rows: 4
+  cols: 4
+  dt: d
+  data: [-0.01039363,  0.99994595,  0.00027614, -0.27939175,
+         -0.99982944, -0.0103882,  -0.01527021,  0.00394073,
+         -0.01526652, -0.00043481,  0.99988337, -0.00039529,
+          0, 0, 0, 1]
+
+system:
+  backend: CUDA
+  num_threads: 12
+  verbose: 0
+
+keyframe:
+  min_matches: 12
+  max_skip: 40

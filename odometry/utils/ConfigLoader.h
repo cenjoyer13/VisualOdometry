@@ -22,6 +22,18 @@ struct ImageSequenceConfig {
     double end_time   = -1.0;   // < 0 means unbounded
     double viz_scale  = 0.5;                   // 2D trajectory visualizer px-per-metre scale
     double aligner_init_distance = 10.0;       // GT travel (m) before solving the VO->GT yaw
+    // Deployment-mode initial heading. The GT auto-aligner recovers, in the
+    // drift-free limit, exactly the vehicle heading at the first tracked frame
+    // plus a fixed mounting constant -- so a heading sensor replaces it without
+    // any ground truth. When heading_file is set the evaluator seeds the yaw
+    // from it at frame 0 and the GT aligner never runs; empty keeps the aligner.
+    // heading_file is a MAVLink ATTITUDE_log.csv (timestamp,time_boot_ms,roll,
+    // pitch,yaw) on the same clock as times_file; yaw is NED radians.
+    // heading_mount_offset (degrees) is the airframe/mount constant: calibrate
+    // it once by running the GT aligner over several segments and taking the
+    // circular mean of (aligner_yaw + heading_at_first_frame).
+    std::string heading_file;
+    double heading_mount_offset = 0.0;
     cv::Vec3d traj_sign{1.0, 1.0, 1.0};        // per-axis sign flip for the VO trajectory (handedness)
     cv::Mat body_T_cam0;                        // 4x4 cam0->body extrinsic; empty = identity
     // Feed GLOBAL_POSITION_INT.relative_alt as AGL so a Homography pose

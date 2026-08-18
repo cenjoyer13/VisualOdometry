@@ -159,6 +159,64 @@ GTSample groundTruthAt(const std::vector<GTSample>& gt, double ts) {
             lo.altitude + (hi.altitude - lo.altitude) * a};
 }
 
+// One MAVLink ATTITUDE sample, reduced to the only field the heading seed uses.
+struct HeadingSample {
+    double timestamp;   // seconds, on the same clock as times_file
+    double yaw;         // NED radians (0 = North, +clockwise)
+};
+
+// Parses a MAVLink ATTITUDE_log.csv:
+//   timestamp,time_boot_ms,roll,pitch,yaw
+// roll/pitch/yaw are radians in the NED body frame. Short or malformed lines
+// are dropped rather than aborting -- some captures (run6) end in a partially
+// flushed record padded with NULs, which sscanf rejects on its own.
+std::vector<HeadingSample> loadHeadingFile(const std::string& path) {
+    std::vector<HeadingSample> out;
+    std::ifstream f(path);
+    if (!f.is_open()) return out;
+
+    std::string line;
+    bool first_line = true;
+    while (std::getline(f, line)) {
+        if (first_line) { first_line = false; continue; }   // header
+        if (line.empty()) continue;
+
+        double ts, roll, pitch, yaw;
+        long long tboot;
+        if (sscanf(line.c_str(), "%lf,%lld,%lf,%lf,%lf",
+                   &ts, &tboot, &roll, &pitch, &yaw) != 5) continue;
+        out.push_back({ts, yaw});
+    }
+    std::sort(out.begin(), out.end(),
+              [](const HeadingSample& a, const HeadingSample& b) {
+                  return a.timestamp < b.timestamp;
+              });
+    return out;
+}
+
+// Shortest-path interpolation between two angles in radians, so a query that
+// straddles the +-pi wrap does not sweep the long way round.
+double lerpAngleRad(double a, double b, double f) {
+    double d = std::fmod(b - a + 3.0 * M_PI, 2.0 * M_PI) - M_PI;
+    return a + f * d;
+}
+
+// Interpolated heading lookup. Clamps to the ends outside the sample window,
+// matching groundTruthAt's behaviour. Returns false only for an empty track.
+bool headingAt(const std::vector<HeadingSample>& track, double ts, double& out_yaw) {
+    if (track.empty()) return false;
+    auto it = std::lower_bound(track.begin(), track.end(), ts,
+                               [](const HeadingSample& s, double t) { return s.timestamp < t; });
+    if (it == track.begin()) { out_yaw = track.front().yaw; return true; }
+    if (it == track.end())   { out_yaw = track.back().yaw;  return true; }
+    const HeadingSample& hi = *it;
+    const HeadingSample& lo = *(it - 1);
+    const double span = hi.timestamp - lo.timestamp;
+    out_yaw = (span <= 0.0) ? lo.yaw
+                            : lerpAngleRad(lo.yaw, hi.yaw, (ts - lo.timestamp) / span);
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -250,6 +308,25 @@ int main(int argc, char** argv) {
     }
     const bool have_gt = !gt_track.empty();
 
+    // Optional deployment-mode heading seed (MAVLink ATTITUDE). Replaces the GT
+    // auto-aligner: the yaw is solved once at the first tracked frame from the
+    // heading sensor alone, so nothing about the alignment depends on ground
+    // truth. Needs the times_file clock for the same reason the GT track does.
+    std::vector<HeadingSample> heading_track;
+    if (!seq_cfg.heading_file.empty()) {
+        if (seq_cfg.times_file.empty()) {
+            std::cerr << "[EVALUATOR] Warning: heading_source.path set but no times_file; "
+                         "cannot align headings to frames, ignoring it.\n";
+        } else {
+            heading_track = loadHeadingFile(seq_cfg.heading_file);
+            if (heading_track.empty()) {
+                std::cerr << "[EVALUATOR] Warning: could not parse heading_source.path '"
+                           << seq_cfg.heading_file << "'; falling back to the GT aligner.\n";
+            }
+        }
+    }
+    const bool use_heading_seed = !heading_track.empty();
+
     // Re-origin the ENU track at the first processed frame so the logged GT
     // starts near zero rather than at the drone's position when the log's first
     // GPS fix landed. Scale is delta-based, so this shifts only the GT columns,
@@ -290,8 +367,11 @@ int main(int argc, char** argv) {
                    << gt_track.size() << " GPS fixes). Per-frame metric ENU position feeds the\n"
                      "            scale estimator; with scale_estimator.type: AirSim the trajectory\n"
                      "            is metric. GT columns are logged (ENU, origin at first frame). The\n"
-                     "            estimate is yaw-aligned to GT after " << seq_cfg.aligner_init_distance
-                  << "m of GT travel and\n            the plot overlays estimate (XY/East-North) vs GT.\n";
+                     "            plot overlays estimate (XY/East-North) vs GT.\n";
+        if (!use_heading_seed) {
+            std::cout << "[EVALUATOR] Yaw alignment: GT auto-aligner, solved after "
+                      << seq_cfg.aligner_init_distance << "m of GT travel.\n";
+        }
         if (seq_cfg.altimeter_scale) {
             std::cout << "[EVALUATOR] Altimeter scale ON: relative_alt (above home, NOT terrain)\n"
                          "            feeds the Homography plane distance. Frames with AGL <= 0\n"
@@ -302,6 +382,13 @@ int main(int argc, char** argv) {
                      "            plot and CSV log both show the VO estimate only (fed to itself\n"
                      "            wherever a GT value would normally go) -- it's a shape check, not\n"
                      "            an accuracy measurement.\n";
+    }
+    if (use_heading_seed) {
+        std::cout << "[EVALUATOR] Yaw alignment: DEPLOYMENT MODE -- seeded at the first tracked\n"
+                     "            frame from " << heading_track.size() << " ATTITUDE samples in "
+                  << seq_cfg.heading_file << ",\n            mount offset "
+                  << seq_cfg.heading_mount_offset << " deg. The GT auto-aligner is bypassed, so\n"
+                     "            no ground truth enters the trajectory's orientation.\n";
     }
     std::cout << "------------------------------------------------------\n";
 
@@ -384,6 +471,32 @@ int main(int argc, char** argv) {
             // handedness flip by conjugation, but not yet the yaw alignment.
             cv::Mat M = traj_flip * cam_to_body
                         * pipeline->getGlobalTransformVO() * traj_flip;
+
+            // Deployment-mode heading seed. Solves the same Z rotation the GT
+            // aligner does, but from the heading sensor at this first tracked
+            // frame: align_yaw = mount_offset - heading(t0). Setting
+            // align_ready here means the GT aligner below never runs, and the
+            // trajectory is aligned from frame 0 rather than after the first
+            // aligner_init_distance metres.
+            if (use_heading_seed && !align_ready) {
+                double h_ned = 0.0;
+                if (headingAt(heading_track, tf.timestamp, h_ned)) {
+                    const double yaw = seq_cfg.heading_mount_offset * M_PI / 180.0 - h_ned;
+                    const double c = std::cos(yaw), s = std::sin(yaw);
+                    align_T_vo = (cv::Mat_<double>(4, 4) <<
+                        c, -s, 0, 0,
+                        s,  c, 0, 0,
+                        0,  0, 1, 0,
+                        0,  0, 0, 1);
+                    align_ready = true;
+                    std::cout << "\n[Heading] seeded from " << seq_cfg.heading_file
+                              << ": heading=" << h_ned * 180.0 / M_PI
+                              << " deg (NED) + mount offset "
+                              << seq_cfg.heading_mount_offset << " deg -> yaw="
+                              << std::remainder(yaw * 180.0 / M_PI, 360.0)
+                              << " deg at frame " << frame_id << " (no GT used)\n";
+                }
+            }
 
             // Auto-aligner: record the VO and GT start once tracking begins, and
             // once GT has travelled aligner_init_distance, solve the yaw that

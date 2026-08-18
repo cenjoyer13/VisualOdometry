@@ -1,0 +1,50 @@
+%YAML:1.0
+
+# MatchDebugger config for the fa10_2026-07-23 Homebrew capture, FRONT-FACING
+# camera (imgs1) -- SIFT variant, contrastThreshold 0.01 to match the nadir
+# SIFT config (see fa10_nadir_sift.yaml for why all five SIFT keys are listed).
+#
+# Pass --verify f: the forward scene has depth spread, so the fundamental
+# matrix is the right verification model, not a homography.
+#
+#   ./MatchDebugger ../configs/matchdebug/fa10_front_sift.yaml --layout stack --verify f
+
+image_sequence:
+  path: ../../../VO-datasets/Homebrew/fa10_2026-07-23/imgs1
+
+detector:
+  type: SIFT
+  SIFT:
+    nfeatures: 3000
+    nOctaveLayers: 3
+    contrastThreshold: 0.01
+    edgeThreshold: 10
+    sigma: 1.6
+
+matcher:
+  type: FLANN
+  distance_ratio: 0.75
+
+bucketing:
+  enabled: 0
+  grid_cols: 8
+  grid_rows: 6
+  max_features_per_bucket: 30
+
+# Front camera calibration. Same caveat as fa10_front.yaml: PinholeCamera does
+# not apply k1/k2/p1/p2 -- intrinsics and scale_factor resize only.
+camera:
+  model_type: "Pinhole"
+  scale_factor: 1.0
+  image_width: 1280
+  image_height: 720
+  mu: 730.62376470
+  mv: 746.08997255
+  u0: 620.42578092
+  v0: 370.82770459
+
+# SIFT has no CUDA path (CUDA -> OpenCL -> CPU cascade); CPU keeps the log clean.
+system:
+  backend: CPU
+  num_threads: 12
+  verbose: 0

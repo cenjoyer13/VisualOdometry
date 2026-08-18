@@ -1,0 +1,59 @@
+%YAML:1.0
+
+# MatchDebugger config for the fa10_2026-07-23 Homebrew capture, nadir camera
+# (imgs0) -- SIFT variant with a lowered contrast threshold.
+#
+# contrastThreshold 0.01 (vs the cv::SIFT default 0.04) admits far weaker
+# extrema, which is what this footage needs: the ploughed-field stretches
+# around frame 2000 starved the default detector down to ~300 keypoints.
+#
+# ConfigLoader reads all five SIFT keys unconditionally once a detector.SIFT
+# block exists, so every one of them is spelled out here -- omitting a key
+# would silently set it to 0, not leave it at the cv::SIFT default.
+#
+# Run from build/:
+#   ./MatchDebugger ../configs/matchdebug/fa10_nadir_sift.yaml --layout stack
+
+image_sequence:
+  path: ../../../VO-datasets/Homebrew/fa10_2026-07-23/imgs0
+
+detector:
+  type: SIFT
+  SIFT:
+    nfeatures: 3000
+    nOctaveLayers: 3
+    contrastThreshold: 0.01
+    edgeThreshold: 10
+    sigma: 1.6
+
+matcher:
+  type: FLANN
+  distance_ratio: 0.75
+
+bucketing:
+  enabled: 0
+  grid_cols: 8
+  grid_rows: 6
+  max_features_per_bucket: 30
+
+# Nadir camera calibration from the dataset readme (Kannala-Brandt fisheye).
+camera:
+  model_type: "KannalaBrandtCamera"
+  scale_factor: 1.0
+  image_width: 1280
+  image_height: 720
+  k2:  0.04620145
+  k3: -0.03831710
+  k4:  0.02262017
+  k5: -0.01124080
+  mu:  549.30287
+  mv:  559.17020
+  u0:  613.57787
+  v0:  383.53130
+
+# SIFT has no CUDA path (it cascades CUDA -> OpenCL -> CPU); CPU keeps the log
+# free of the cascade warnings.
+system:
+  backend: CPU
+  num_threads: 12
+  verbose: 0
