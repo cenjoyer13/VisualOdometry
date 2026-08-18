@@ -8,19 +8,16 @@
  *******************************************************/
 
 #pragma once
+#include "../utility/ros_compat.h"
  
 #include <thread>
 #include <mutex>
-#include <std_msgs/Header.h>
-#include <std_msgs/Float32.h>
 #include <ceres/ceres.h>
 #include <unordered_map>
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 #include <eigen3/Eigen/Dense>
 #include <eigen3/Eigen/Geometry>
-#include <tf/transform_listener.h>
-
 #include "parameters.h"
 #include "feature_manager.h"
 #include "../utility/utility.h"

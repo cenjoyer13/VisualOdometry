@@ -222,14 +222,11 @@ if(UNIX AND ROS_ROOT)
     find_library(ROSTIME_LIB          rostime                PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
     find_library(ROSCONSOLE_LIB       rosconsole             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
     find_library(CPP_COMMON_LIB       cpp_common             PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
-    # roscpp + tf are needed by the vendored VINS estimator, not by bag reading:
-    # its Estimator holds a ros::NodeHandle and estimator.h includes
-    # tf/transform_listener.h. Both go away when the backend is de-ROSed.
-    find_library(ROSCPP_LIB           roscpp                 PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
-    find_library(TF_LIB               tf                     PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
-    find_library(TF2_LIB              tf2                    PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
-    find_library(TF2_ROS_LIB          tf2_ros                PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
-    find_library(XMLRPCPP_LIB         xmlrpcpp               PATHS ${ROS_ROOT}/lib NO_DEFAULT_PATH)
+    # roscpp / tf / tf2 / xmlrpcpp are deliberately NOT linked. They were needed
+    # only while the vendored Estimator held a ros::NodeHandle; the de-ROS pass
+    # removed that, and ldd confirms none of them were being loaded even before
+    # they were dropped from this list. What remains below is the bag reader's
+    # own dependency set, nothing else.
 
     if(ROSBAG_LIB AND ROSBAG_STORAGE_LIB AND ROSCPP_SER_LIB AND ROSTIME_LIB)
         message(STATUS "ROS integration enabled — building RosbagEvaluator.")
@@ -256,11 +253,6 @@ if(UNIX AND ROS_ROOT)
             ${ONNXRUNTIME_LIB}
             ${CERES_LIB}
             ${GLOG_LIB}
-            ${ROSCPP_LIB}
-            ${TF_LIB}
-            ${TF2_LIB}
-            ${TF2_ROS_LIB}
-            ${XMLRPCPP_LIB}
             ${ROSBAG_LIB}
             ${ROSBAG_STORAGE_LIB}
             ${ROSCPP_SER_LIB}

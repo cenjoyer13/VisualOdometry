@@ -1,4 +1,5 @@
 #pragma once
+#include "ros_compat.h"
 
 // Headless replacement for VINS-Fusion's utility/visualization.h.
 //
@@ -8,16 +9,12 @@
 // estimator's state directly through Estimator's members instead, so none of
 // that is wanted.
 //
-// Estimator.cpp references exactly one symbol from the original header --
-// pubLatestOdometry(), called from inputIMU() on every IMU sample once the
-// solver is in NON_LINEAR. Everything else it needs comes from its own headers.
-// Keeping the include and no-op'ing the one call leaves estimator.cpp
-// byte-identical to upstream, which matters: the vendored tree should stay
-// diffable against VINS-Fusion so upstream fixes remain easy to apply.
+// The publisher set estimator.cpp calls once per solved frame is no-op'd here.
+// Upstream they take a std_msgs::Header; these take the timestamp as a plain
+// double instead, so no ROS message type leaks into the backend. That is the
+// only signature divergence from upstream in this file.
 
 #include <eigen3/Eigen/Dense>
-#include <std_msgs/Header.h>
-
 class Estimator;
 
 // Everything estimator.cpp calls, no-op'd. processMeasurements() fires the
@@ -28,10 +25,10 @@ inline void pubLatestOdometry(const Eigen::Vector3d& /*P*/,
                               const Eigen::Vector3d& /*V*/,
                               double /*t*/) {}
 
-inline void printStatistics(const Estimator& /*estimator*/, double /*t*/) {}
-inline void pubOdometry(const Estimator& /*e*/, const std_msgs::Header& /*h*/) {}
-inline void pubKeyPoses(const Estimator& /*e*/, const std_msgs::Header& /*h*/) {}
-inline void pubCameraPose(const Estimator& /*e*/, const std_msgs::Header& /*h*/) {}
-inline void pubPointCloud(const Estimator& /*e*/, const std_msgs::Header& /*h*/) {}
-inline void pubTF(const Estimator& /*e*/, const std_msgs::Header& /*h*/) {}
+inline void printStatistics(const Estimator& /*e*/, double /*t*/) {}
+inline void pubOdometry(const Estimator& /*e*/, double /*stamp*/) {}
+inline void pubKeyPoses(const Estimator& /*e*/, double /*stamp*/) {}
+inline void pubCameraPose(const Estimator& /*e*/, double /*stamp*/) {}
+inline void pubPointCloud(const Estimator& /*e*/, double /*stamp*/) {}
+inline void pubTF(const Estimator& /*e*/, double /*stamp*/) {}
 inline void pubKeyframe(const Estimator& /*e*/) {}

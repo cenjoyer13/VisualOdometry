@@ -8,8 +8,8 @@
  *******************************************************/
 
 #pragma once
+#include "../utility/ros_compat.h"
 
-#include <ros/ros.h>
 #include <vector>
 #include <eigen3/Eigen/Dense>
 #include "../utility/utility.h"
@@ -18,22 +18,14 @@
 #include <fstream>
 #include <map>
 
-#include <std_msgs/Header.h>
-#include <std_msgs/Bool.h>
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/PointCloud.h>
-#include <sensor_msgs/PointCloud2.h>
-#include <sensor_msgs/image_encodings.h>
-#include <nav_msgs/Odometry.h>
-#include <tf/transform_listener.h>
-
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core_c.h>
 #include <opencv2/imgproc/types_c.h>
 #include <opencv2/imgproc/imgproc_c.h>
 #include <opencv2/calib3d/calib3d_c.h>
-#include <cv_bridge/cv_bridge.h>
+// <cv_bridge/cv_bridge.h> removed: it is a ROS package (sensor_msgs::Image <->
+// cv::Mat conversion) used by the node wrapper, never by the estimator, and it
+// was the last thing dragging the ROS message headers into this backend.
 #include <eigen3/Eigen/Dense>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/highgui/highgui.hpp>

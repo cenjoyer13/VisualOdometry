@@ -215,16 +215,18 @@ void Estimator::processMeasurements()
 
             printStatistics(*this, 0);
 
-            std_msgs::Header header;
-            header.frame_id = "world";
-            header.stamp = ros::Time(feature.first);
+            // Upstream built a std_msgs::Header here purely to stamp the RViz
+            // publishers. Those are no-ops now (utility/visualization.h) and the
+            // timestamp is passed as a plain double, so no ROS message type is
+            // needed.
+            const double stamp = feature.first;
 
-            pubOdometry(*this, header);
-            pubKeyPoses(*this, header);
-            pubCameraPose(*this, header);
-            pubPointCloud(*this, header);
+            pubOdometry(*this, stamp);
+            pubKeyPoses(*this, stamp);
+            pubCameraPose(*this, stamp);
+            pubPointCloud(*this, stamp);
             pubKeyframe(*this);
-            pubTF(*this, header);
+            pubTF(*this, stamp);
             printf("process measurement time: %f\n", t_process.toc());
         }
 

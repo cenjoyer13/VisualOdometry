@@ -10,8 +10,8 @@
  *******************************************************/
 
 #pragma once
+#include "../utility/ros_compat.h"
 
-#include <ros/assert.h>
 #include <ceres/ceres.h>
 #include <Eigen/Dense>
 #include "../utility/utility.h"

@@ -6,6 +6,7 @@
  * Licensed under the GNU General Public License v3.0;
  * you may not use this file except in compliance with the License.
  *******************************************************/
+#include "../utility/ros_compat.h"
 
 #ifndef FEATURE_MANAGER_H
 #define FEATURE_MANAGER_H
@@ -18,9 +19,6 @@ using namespace std;
 
 #include <eigen3/Eigen/Dense>
 using namespace Eigen;
-
-#include <ros/console.h>
-#include <ros/assert.h>
 
 #include "parameters.h"
 #include "../utility/tic_toc.h"

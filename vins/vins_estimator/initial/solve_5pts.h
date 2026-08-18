@@ -10,6 +10,7 @@
  *******************************************************/
 
 #pragma once
+#include "../utility/ros_compat.h"
 
 #include <vector>
 using namespace std;
@@ -18,8 +19,6 @@ using namespace std;
 //#include <opencv2/core/eigen.hpp>
 #include <eigen3/Eigen/Dense>
 using namespace Eigen;
-
-#include <ros/console.h>
 
 class MotionEstimator
 {
