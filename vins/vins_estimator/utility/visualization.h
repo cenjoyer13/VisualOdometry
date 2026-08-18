@@ -10,9 +10,9 @@
 // that is wanted.
 //
 // The publisher set estimator.cpp calls once per solved frame is no-op'd here.
-// Upstream they take a std_msgs::Header; these take the timestamp as a plain
-// double instead, so no ROS message type leaks into the backend. That is the
-// only signature divergence from upstream in this file.
+// Upstream they take a std_msgs::Header; these take a plain double, so no ROS
+// message type leaks into the backend. Consumers read the estimator's state
+// directly off its members instead (see VinsBackend::logState).
 
 #include <eigen3/Eigen/Dense>
 class Estimator;

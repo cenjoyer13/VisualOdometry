@@ -153,27 +153,25 @@ endif()
 # =========================================================================
 # Vendored VINS-Fusion backend (vins/).
 #
-# Copied from sendtooscar/VINS-Fusion-gpu with two deliberate deviations, both
-# documented at their sites: PCL and the lidar-depth path are stripped, and
-# utility/visualization.h is replaced by a headless stub. Everything else is
-# upstream verbatim so the tree stays diffable against VINS-Fusion.
+# Derived from sendtooscar/VINS-Fusion-gpu, reduced to the part with real value:
+# the visual-inertial estimator math (preintegration, the sliding-window solve,
+# marginalisation, and the initialisation that makes scale observable).
 #
-# It is still ROS-coupled (Estimator holds a ros::NodeHandle), which is why only
-# the rosbag target can link it today. Stripping that is the prerequisite for
-# running the backend outside a bag.
+# Everything that merely wrapped that math for a ROS node has been removed
+# rather than shimmed -- the lidar/PCL depth path, the RViz publishers, the
+# ros::NodeHandle, and the KLT feature tracker with its camodocal camera models.
+# This tree is not kept diffable against upstream: it is a controlled
+# integration, and carrying a second frontend and a second camera model just to
+# preserve that lineage cost ~10,850 lines and gave two sources of truth for one
+# physical camera.
 # =========================================================================
 file(GLOB_RECURSE SRC_VINS CONFIGURE_DEPENDS
     "vins/vins_estimator/estimator/*.cpp"
     "vins/vins_estimator/factor/*.cpp"
     "vins/vins_estimator/initial/*.cpp"
-    "vins/vins_estimator/featureTracker/*.cpp"
     "vins/vins_estimator/utility/*.cpp"
-    "vins/camera_models/src/*/*.cc"
 )
-set(VINS_INCLUDE_DIRS
-    ${CMAKE_CURRENT_SOURCE_DIR}/vins
-    ${CMAKE_CURRENT_SOURCE_DIR}/vins/camera_models/include
-)
+set(VINS_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/vins)
 
 # Split the odometry sources: only the VIO pipeline needs the VINS backend
 # (and therefore Ceres + ROS). Frontend-only tools must not drag that in.

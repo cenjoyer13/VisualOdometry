@@ -63,8 +63,8 @@ void VinsBackend::addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr) {
 
 void VinsBackend::addFrame(double t,
                            const std::vector<int64_t>& ids,
-                           const std::vector<cv::Point2f>& pts,
-                           const CameraIntrinsics& K) {
+                           const std::vector<cv::Point2f>& norm,
+                           const std::vector<cv::Point2f>& px) {
     // Feed-rate throttle, standing in for the one we bypassed. VINS's own
     // tracker only emits a featureFrame when it is below FREQ Hz (feature_tracker
     // .cpp's PUB_THIS_FRAME gate), and upstream additionally drops every other
@@ -79,25 +79,21 @@ void VinsBackend::addFrame(double t,
     if (feed_hz_ > 0.0) {
         const double min_dt = 1.0 / feed_hz_;
         if (last_fed_t_ > 0.0 && (t - last_fed_t_) < min_dt * 0.99) {
-            LogRec("feed")("accepted", false)("n_feat", (int)ids.size());
+                    LogRec("feed")("accepted", false)("n_feat", (int)ids.size());
             return;
         }
         last_fed_t_ = t;
     }
 
-    // featureFrame layout mirrors FeatureTracker::trackImage()'s return value
-    // exactly -- see the header for why velocity is left at zero.
+    // featureFrame is the format Estimator::processImage consumes:
+    // id -> [(camera_id, [x, y, 1, u, v, vx, vy])]. See the header for why
+    // velocity is left at zero.
     std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
 
-    const size_t n = std::min(ids.size(), pts.size());
+    const size_t n = std::min(ids.size(), std::min(norm.size(), px.size()));
     for (size_t i = 0; i < n; ++i) {
-        const double u = pts[i].x;
-        const double v = pts[i].y;
-        const double x = (u - K.cx) / K.fx;   // rectified pinhole -> normalized
-        const double y = (v - K.cy) / K.fy;
-
         Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
-        xyz_uv_velocity << x, y, 1.0, u, v, 0.0, 0.0;
+        xyz_uv_velocity << norm[i].x, norm[i].y, 1.0, px[i].x, px[i].y, 0.0, 0.0;
         // camera_id 0: monocular. A second camera would append (1, ...) under
         // the SAME feature id, which is how VINS recognizes a stereo pair.
         featureFrame[static_cast<int>(ids[i])].emplace_back(0, xyz_uv_velocity);

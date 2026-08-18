@@ -13,9 +13,12 @@ public:
     CameraIntrinsics intrinsics() const override { return intrinsics_; }
     cv::Size outputSize() const override { return output_size_; }
     cv::Mat undistortImage(const cv::Mat& raw) const override;
+    void liftProjective(const std::vector<cv::Point2f>& px,
+                        std::vector<cv::Point2f>& out) const override;
 
 private:
     CameraIntrinsics intrinsics_;
     cv::Size output_size_;
-    cv::Mat map1_, map2_;   // cv::remap lookup tables (CV_16SC2 + CV_16UC1)
+    cv::Mat map1_, map2_;
+    cv::Mat K_, D_;      // calibrated fisheye intrinsics, for point lifting   // cv::remap lookup tables (CV_16SC2 + CV_16UC1)
 };

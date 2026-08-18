@@ -20,7 +20,6 @@ Estimator::Estimator():
     openExEstimation = 0;
     initP = Eigen::Vector3d(0, 0, 0);
     initR = Eigen::Matrix3d::Identity();
-    inputImageCnt = 0;
     // sum_t_feature = 0.0;
     // begin_time_count = 10;
     initFirstPoseFlag = false;
@@ -41,7 +40,6 @@ void Estimator::setParameter()
     td = TD;
     g = G;
     cout << "set g " << g.transpose() << endl;
-    featureTracker.readIntrinsicParameter(CAM_NAMES);
 
     std::cout << "MULTIPLE_THREAD is " << MULTIPLE_THREAD << '\n';
     if (MULTIPLE_THREAD)
@@ -50,49 +48,6 @@ void Estimator::setParameter()
     }
 }
 
-
-void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
-{
-//     if(begin_time_count<=0)
-    inputImageCnt++;
-    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
-    // TicToc featureTrackerTime;
-    if(_img1.empty())
-        featureFrame = featureTracker.trackImage(t, _img);
-    else
-        featureFrame = featureTracker.trackImage(t, _img, _img1);
-    // if(begin_time_count--<=0)
-    // {
-    //     sum_t_feature += featureTrackerTime.toc();
-    //     printf("featureTracker time: %f\n", sum_t_feature/(float)inputImageCnt);
-    // }
-
-    
-    if(MULTIPLE_THREAD)  
-    {     
-        if(inputImageCnt % 2 == 0)
-        {
-            mBuf.lock();
-            featureBuf.push(make_pair(t, featureFrame));
-            mBuf.unlock();
-        }
-    }
-    else
-    {
-        mBuf.lock();
-        featureBuf.push(make_pair(t, featureFrame));
-        mBuf.unlock();
-        TicToc processTime;
-        processMeasurements();
-        printf("process time: %f\n", processTime.toc());
-   //Print VO time to a file
-   std::ofstream foutC("/home/islab/catkin_ws/VOTime.txt", std::ios::app);             //Delete the previous file -ToDO --- check how to replace
-   foutC.setf(std::ios::fixed, std::ios::floatfield);
-   foutC.precision(6);
-   foutC << processTime.toc() << std::endl;
-    }
-    
-}
 
 void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity)
 {
@@ -485,12 +440,10 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         set<int> removeIndex;
         outliersRejection(removeIndex);
         f_manager.removeOutlier(removeIndex);
-        if (! MULTIPLE_THREAD)
-        {
-            featureTracker.removeOutliers(removeIndex);
-            predictPtsInNextFrame();
-        }
-            
+        // Upstream also pushed the outlier set and a constant-velocity
+        // prediction back into its own KLT tracker here. That tracker is gone
+        // with the rest of the VINS frontend: this fork supplies features from
+        // odometry/frontend, so there is nothing to prime.
         ROS_DEBUG("solver costs: %fms", t_solve.toc());
 
         if (failureDetection())
@@ -1400,41 +1353,6 @@ void Estimator::getPoseInWorldFrame(int index, Eigen::Matrix4d &T)
     T = Eigen::Matrix4d::Identity();
     T.block<3, 3>(0, 0) = Rs[index];
     T.block<3, 1>(0, 3) = Ps[index];
-}
-
-void Estimator::predictPtsInNextFrame()
-{
-    //printf("predict pts in next frame\n");
-    if(frame_count < 2)
-        return;
-    // predict next pose. Assume constant velocity motion
-    Eigen::Matrix4d curT, prevT, nextT;
-    getPoseInWorldFrame(curT);
-    getPoseInWorldFrame(frame_count - 1, prevT);
-    nextT = curT * (prevT.inverse() * curT);
-    map<int, Eigen::Vector3d> predictPts;
-
-    for (auto &it_per_id : f_manager.feature)
-    {
-        if(it_per_id.estimated_depth > 0)
-        {
-            int firstIndex = it_per_id.start_frame;
-            int lastIndex = it_per_id.start_frame + it_per_id.feature_per_frame.size() - 1;
-            //printf("cur frame index  %d last frame index %d\n", frame_count, lastIndex);
-            if((int)it_per_id.feature_per_frame.size() >= 2 && lastIndex == frame_count)
-            {
-                double depth = it_per_id.estimated_depth;
-                Vector3d pts_j = ric[0] * (depth * it_per_id.feature_per_frame[0].point) + tic[0];
-                Vector3d pts_w = Rs[firstIndex] * pts_j + Ps[firstIndex];
-                Vector3d pts_local = nextT.block<3, 3>(0, 0).transpose() * (pts_w - nextT.block<3, 1>(0, 3));
-                Vector3d pts_cam = ric[0].transpose() * (pts_local - tic[0]);
-                int ptsIndex = it_per_id.feature_id;
-                predictPts[ptsIndex] = pts_cam;
-            }
-        }
-    }
-    featureTracker.setPrediction(predictPts);
-    //printf("estimator output %d predict pts\n",(int)predictPts.size());
 }
 
 double Estimator::reprojectionError(Matrix3d &Ri, Vector3d &Pi, Matrix3d &rici, Vector3d &tici,

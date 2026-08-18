@@ -7,23 +7,31 @@
 #include "utils/Perf.h"
 
 std::unique_ptr<OdometryPipeline> OdometryPipeline::build(const OdometryConfig& config,
-                                                          const std::string& vins_config) {
+                                                          const std::string& vins_config,
+                                                          const ICameraModel* camera) {
     std::cout << "[OdometryPipeline] Initiating build sequence..." << std::endl;
     return std::make_unique<OdometryPipeline>(
         config,
         FrontendFactory::create(config),
-        std::make_unique<VinsBackend>(vins_config)
+        std::make_unique<VinsBackend>(vins_config),
+        camera
     );
 }
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig& cfg,
                                    std::unique_ptr<IFrontend> f,
-                                   std::unique_ptr<VinsBackend> b)
+                                   std::unique_ptr<VinsBackend> b,
+                                   const ICameraModel* camera)
     : config(cfg),
       frontend(std::move(f)),
-      backend_(std::move(b))
+      backend_(std::move(b)),
+      camera_(camera)
 {
-    std::cout << "[OdometryPipeline] Frontend + VINS backend assembled." << std::endl;
+    std::cout << "[OdometryPipeline] Frontend + VINS backend assembled ("
+              << (config.undistort_mode == UndistortMode::Points
+                      ? "raw frames, points lifted"
+                      : "rectified frames, linear normalisation")
+              << ")." << std::endl;
 }
 
 OdometryPipeline::~OdometryPipeline() = default;
@@ -75,10 +83,29 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
         return;
     }
 
+    // Pixels -> bearings. The two undistort modes differ here and nowhere else:
+    //   Points -- the frontend saw the RAW frame, so the full lens model has to
+    //             be inverted per feature (ICameraModel::liftProjective).
+    //   Image  -- the evaluator already rectified the frame, so the mapping is
+    //             the plain pinhole normalisation against the rectified
+    //             intrinsics. Calling liftProjective here would undistort a
+    //             second time.
+    if (config.undistort_mode == UndistortMode::Points) {
+        PERF_SCOPE(perf::Undistort);
+        camera_->liftProjective(fr.points2D, norm_);
+    } else {
+        const CameraIntrinsics& K = config.intrinsics;
+        norm_.resize(fr.points2D.size());
+        for (size_t i = 0; i < fr.points2D.size(); ++i) {
+            norm_[i].x = (fr.points2D[i].x - K.cx) / K.fx;
+            norm_[i].y = (fr.points2D[i].y - K.cy) / K.fy;
+        }
+    }
+
     const auto t0 = std::chrono::high_resolution_clock::now();
     {
         PERF_SCOPE(perf::Backend);
-        backend_->addFrame(timestamp, fr.track_ids, fr.points2D, config.intrinsics);
+        backend_->addFrame(timestamp, fr.track_ids, norm_, fr.points2D);
     }
     const auto t1 = std::chrono::high_resolution_clock::now();
     metrics.time_pose_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();

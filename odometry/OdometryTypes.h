@@ -65,6 +65,14 @@ struct CameraIntrinsics {
     float fx, fy, cx, cy;
 };
 
+// How lens distortion is removed. See odometry/camera/ICameraModel.h for the
+// trade-off; it is a config key because the right answer depends on the
+// frontend and is a thing to measure.
+enum class UndistortMode {
+    Image,   // rectify the whole frame, frontend sees a pinhole image
+    Points   // frontend sees the raw frame, only feature pixels are lifted
+};
+
 struct BucketingConfig {
     bool enabled = false;
     int grid_cols = 10;
@@ -114,6 +122,8 @@ struct OdometryConfig {
     // Global debug toggle, set by YAML system.verbose or CLI --debug.
     bool verbose = false;
 
+
+    UndistortMode undistort_mode = UndistortMode::Image;
 
     BucketingConfig bucketing_params;
 

@@ -15,10 +15,10 @@
 // then survives only in the bag reader (RosbagEvaluator), which is a testing
 // target -- so a shipped build that reads its own capture format needs no ROS.
 //
-// Keeping the macro NAMES rather than rewriting the call sites is deliberate:
-// the vendored tree stays diffable against upstream VINS-Fusion, so upstream
-// fixes remain easy to apply. Every change to vins/ is a deletion or a shim,
-// never a rewrite.
+// The macro NAMES are kept only because rewriting ~100 call sites would be
+// churn for no benefit -- not to preserve any upstream lineage. This tree is a
+// controlled integration of the estimator math, not a vendored copy tracking
+// VINS-Fusion.
 //
 // SEMANTICS
 // ---------
@@ -43,11 +43,9 @@
 // emits a {"type":"vins",...} record into the structured run log, stamped with
 // the frame being processed.
 //
-// This is why the de-ROS pass pays off twice. Every diagnostic VINS emits --
-// including the initialisation failure reasons at estimator.cpp:498/548/576/661
-// and the Ceres iteration count at :1071 -- already flows through these macros,
-// so routing them here captures the backend's entire diagnostic surface with no
-// further edits to upstream sources.
+// Every diagnostic the estimator emits -- including its initialisation failure
+// reasons and the Ceres iteration count -- flows through these macros, so this
+// one funnel captures the backend's entire diagnostic surface.
 namespace vins_log {
 void logf(const char* level, const char* fmt, ...);
 void logs(const char* level, const std::string& text);

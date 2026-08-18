@@ -58,7 +58,6 @@ Eigen::Matrix3d rectify_R_right;
 map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FISHEYE_MASK;
-std::vector<std::string> CAM_NAMES;
 int MAX_CNT;
 int MIN_DIST;
 double F_THRESHOLD;
@@ -189,19 +188,11 @@ void readParameters(std::string config_file)
     int pn = config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
     
-    std::string cam0Calib;
-    fsSettings["cam0_calib"] >> cam0Calib;
-    std::string cam0Path = configPath + "/" + cam0Calib;
-    CAM_NAMES.push_back(cam0Path);
 
     if(NUM_OF_CAM == 2)
     {
         STEREO = 1;
         std::string cam1Calib;
-        fsSettings["cam1_calib"] >> cam1Calib;
-        std::string cam1Path = configPath + "/" + cam1Calib; 
-        //printf("%s cam1 path\n", cam1Path.c_str() );
-        CAM_NAMES.push_back(cam1Path);
         
         cv::Mat cv_T;
         fsSettings["body_T_cam1"] >> cv_T;

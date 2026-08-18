@@ -367,7 +367,7 @@ int main(int argc, char** argv) {
          ("cy", (double)config.intrinsics.cy);
     }
 
-    auto pipeline = OdometryPipeline::build(config, bag_cfg.vins_config);
+    auto pipeline = OdometryPipeline::build(config, bag_cfg.vins_config, camera.get());
 
     std::ofstream log_file(out_path);
     // Column 0 is the image timestamp (seconds, bag clock), not a frame index:
@@ -496,7 +496,13 @@ int main(int argc, char** argv) {
         cv::Mat frame;
         { PERF_SCOPE(perf::Decode); frame = decodeImage(img_msg); }
         if (frame.empty()) continue;
-        if (camera) { PERF_SCOPE(perf::Undistort); frame = camera->undistortImage(frame); }
+        // Only Image mode rectifies. In Points mode the frontend must see the
+        // raw frame -- rectifying here and lifting later would apply the lens
+        // model twice.
+        if (camera && config.undistort_mode == UndistortMode::Image) {
+            PERF_SCOPE(perf::Undistort);
+            frame = camera->undistortImage(frame);
+        }
 
         // Image timestamp on the IMU clock: image_clock + td = imu_clock.
         // Raw image stamp: VINS applies its own configured td internally

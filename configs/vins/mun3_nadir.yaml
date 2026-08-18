@@ -27,7 +27,9 @@ imu_topic: "/imu/data"
 image0_topic: "/camera/image_mono"
 output_path: "./vins_output"
 
-cam0_calib: "payload_cam_down_NRC1.yaml"
+# cam0_calib removed: the KLT tracker and camodocal that consumed it are gone.
+# Lens geometry lives in the project config's `camera:` block, which is now
+# the single source of truth (see odometry/camera/ICameraModel.h).
 image_width: 1440
 image_height: 1080
 

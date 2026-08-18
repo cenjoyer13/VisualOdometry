@@ -42,17 +42,20 @@ class Estimator;
 //     the configured value and that term cancels, so zeros are exact rather
 //     than merely tolerable. Revisit if estimate_td is ever turned on.
 //
-// Pixels arriving here are already RECTIFIED PINHOLE pixels: the evaluator
-// applies ICameraModel::undistortImage() before the frontend runs, so
-// normalization is the plain (u - cx) / fx. Do not undistort twice.
+// This class does NO lens geometry. It receives points already lifted to the
+// unit-depth plane, because who owns that mapping depends on the undistort mode
+// (see ICameraModel): rectified-image mode makes it a linear normalisation,
+// raw-image mode makes it a full Kannala-Brandt inversion. OdometryPipeline
+// resolves that and hands the result down, so there is exactly one place the
+// two modes differ.
 class VinsBackend {
 public:
     // `vins_config` is a stock VINS-Fusion yaml (imu/cam topics, body_T_cam0,
     // noise densities, td). It is read by VINS's own readParameters(), so the
-    // dataset's proven calibration transfers verbatim instead of being
-    // re-derived from this project's schema. Relative paths inside it (notably
-    // cam0_calib) resolve against the config file's own directory, matching
-    // upstream behavior.
+    // dataset's proven IMU calibration transfers verbatim instead of being
+    // re-derived from this project's schema. It no longer carries lens
+    // geometry: cam0_calib went with the KLT tracker, and the `camera:` block
+    // in the project config is now the only description of the camera.
     //
     // No ROS master or ros::init() needed: the vendored Estimator's NodeHandle
     // was removed along with the lidar debug publishers.
@@ -63,14 +66,15 @@ public:
     void addImu(double t, const cv::Vec3d& acc, const cv::Vec3d& gyr);
 
     // One frame of tracked features. `t` is the image timestamp on the IMU
-    // clock (VINS applies its own td on top). `ids` and `pts` must be the same
-    // length and index-aligned; `pts` are rectified pinhole pixels and `K` the
-    // matching rectified intrinsics. Feeds every frame, not just keyframes --
-    // VINS makes its own keyframe/marginalization decision from parallax.
+    // clock (VINS applies its own td on top). All three vectors must be the
+    // same length and index-aligned: `norm` are normalised coordinates on the
+    // unit-depth plane, `px` the pixels they were measured at (VINS carries
+    // them through for its own bookkeeping). Feeds every frame, not just
+    // keyframes -- VINS makes its own parallax-based keyframe decision.
     void addFrame(double t,
                   const std::vector<int64_t>& ids,
-                  const std::vector<cv::Point2f>& pts,
-                  const CameraIntrinsics& K);
+                  const std::vector<cv::Point2f>& norm,
+                  const std::vector<cv::Point2f>& px);
 
     // True once VINS has finished initialization and is running the nonlinear
     // solver. Before that the reported pose is meaningless.

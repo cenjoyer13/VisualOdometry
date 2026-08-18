@@ -8,6 +8,7 @@
 #include "OdometryTypes.h"
 #include "frontend/IFrontend.h"
 #include "vins/VinsBackend.h"
+#include "camera/ICameraModel.h"
 
 // Frontend + VINS backend.
 //
@@ -33,12 +34,17 @@ public:
     ~OdometryPipeline();
 
     // `vins_config` is a stock VINS-Fusion yaml; see VinsBackend.
+    // `camera` must outlive the pipeline. It is what turns feature pixels into
+    // bearings, and which of its two mappings is used depends on
+    // config.undistort_mode -- see processFrame.
     static std::unique_ptr<OdometryPipeline> build(const OdometryConfig& config,
-                                                   const std::string& vins_config);
+                                                   const std::string& vins_config,
+                                                   const ICameraModel* camera);
 
     OdometryPipeline(const OdometryConfig& cfg,
                      std::unique_ptr<IFrontend> f,
-                     std::unique_ptr<VinsBackend> b);
+                     std::unique_ptr<VinsBackend> b,
+                     const ICameraModel* camera);
 
     // `timestamp` is the image time on the IMU clock (seconds). GroundTruthData
     // is accepted for logging/evaluation only -- nothing in the estimate reads
@@ -71,6 +77,10 @@ private:
 
     std::unique_ptr<IFrontend> frontend;
     std::unique_ptr<VinsBackend> backend_;
+    const ICameraModel* camera_ = nullptr;
+
+    // Scratch for the pixel -> bearing conversion, reused across frames.
+    std::vector<cv::Point2f> norm_;
 
     bool is_first_frame = true;
     bool warned_no_track_ids_ = false;

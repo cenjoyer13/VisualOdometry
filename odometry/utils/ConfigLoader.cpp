@@ -153,6 +153,12 @@ bool ConfigLoader::loadOdometryConfig(OdometryConfig& out) {
 
     // Camera intrinsics. Primary key is top-level "camera:"; fall back to the
     // legacy "airsim.intrinsics:" block so older YAML configs keep working.
+    if (!fs["camera"]["undistort"].empty()) {
+        const std::string m = readStr(fs["camera"]["undistort"]);
+        out.undistort_mode = (m == "points") ? UndistortMode::Points
+                                             : UndistortMode::Image;
+    }
+
     cv::FileNode cam_node = fs["camera"];
     if (cam_node.empty()) {
         cam_node = fs["airsim"]["intrinsics"];

@@ -11,6 +11,8 @@ KannalaBrandtCamera::KannalaBrandtCamera(const CameraModelConfig& cfg) {
         0.0,    cfg.mv, cfg.v0,
         0.0,    0.0,    1.0);
     cv::Mat D = (cv::Mat_<double>(4, 1) << cfg.k2, cfg.k3, cfg.k4, cfg.k5);
+    K_ = K.clone();
+    D_ = D.clone();
 
     // Target pinhole matrix: same focal/principal point, scaled to the output
     // resolution. Keeping the calibrated focal yields a central, fixed crop of
@@ -36,4 +38,16 @@ cv::Mat KannalaBrandtCamera::undistortImage(const cv::Mat& raw) const {
     cv::Mat out;
     cv::remap(raw, out, map1_, map2_, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
     return out;
+}
+
+void KannalaBrandtCamera::liftProjective(const std::vector<cv::Point2f>& px,
+                                         std::vector<cv::Point2f>& out) const {
+    out.clear();
+    if (px.empty()) return;
+    // cv::fisheye::undistortPoints with an empty P returns normalised
+    // coordinates directly: it inverts the Kannala-Brandt polynomial by Newton
+    // iteration, the same computation camodocal's backprojectSymmetric does.
+    // Note this consumes RAW pixels, so it must not be combined with
+    // undistortImage on the same frame.
+    cv::fisheye::undistortPoints(px, out, K_, D_, cv::noArray(), cv::noArray());
 }
