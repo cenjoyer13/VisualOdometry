@@ -30,16 +30,20 @@ PY="/home/lysenko/VO-testing/VINS/tools/evo_venv/bin/python"
 EVO_APE="/home/lysenko/VO-testing/VINS/tools/evo_venv/bin/evo_ape"
 GT_POS="$EVO_DIR/bell3/bell412_dataset3_frl.pos"
 
-VIO=${1:-$HERE/results/mun3_optical.csv}
-TAG=${2:-mun3_optical}
-OUT="$(dirname "$VIO")"
+VIO=${1:-$HERE/results/mun3_optical/trajectory.csv}
+TAG=${2:-}
+# results/ is one folder per run; derive the tag from it and keep the derived
+# artefacts in <run>/eval/ so the run folder stays readable.
+if [ -z "$TAG" ]; then TAG="$(basename "$(dirname "$VIO")")"; fi
+OUT="$(dirname "$VIO")/eval"
+mkdir -p "$OUT"
 
 for f in "$PY" "$EVO_APE" "$GT_POS" "$VIO"; do
     [ -e "$f" ] || { echo "missing: $f" >&2; exit 1; }
 done
 
 echo "[1/4] normalising CSV (drop header, keep qx,qy,qz,qw order)"
-"$PY" - "$VIO" "$OUT/${TAG}_evo.csv" <<'EOF'
+"$PY" - "$VIO" "$OUT/evo.csv" <<'EOF'
 import sys
 src, dst = sys.argv[1], sys.argv[2]
 n = 0
@@ -61,20 +65,20 @@ print(f"      {n} poses")
 EOF
 
 echo "[2/4] prepare_evo.py (crop, 1:1 downsample to GT, start yaw + anchor)"
-"$PY" "$EVO_DIR/prepare_evo.py" "$OUT/${TAG}_evo.csv" "$GT_POS" \
-    --out_vins "$OUT/${TAG}_aligned.tum" --out_gt "$OUT/${TAG}_gt.tum" \
+"$PY" "$EVO_DIR/prepare_evo.py" "$OUT/evo.csv" "$GT_POS" \
+    --out_vins "$OUT/aligned.tum" --out_gt "$OUT/gt.tum" \
     | sed -n 's/^    -> /      /p'
 
 echo "[3/4] make_dr.py (yaw-only fit over first 30 m, snap start)"
-"$PY" "$EVO_DIR/make_dr.py" "$OUT/${TAG}_aligned.tum" "$OUT/${TAG}_gt.tum" \
-    --out "$OUT/${TAG}_dr.tum" | sed 's/^/      /'
+"$PY" "$EVO_DIR/make_dr.py" "$OUT/aligned.tum" "$OUT/gt.tum" \
+    --out "$OUT/dr.tum" | sed 's/^/      /'
 
 echo "[4/4] evo_ape, NO alignment"
-"$EVO_APE" tum "$OUT/${TAG}_gt.tum" "$OUT/${TAG}_dr.tum" \
-    --save_results "$OUT/${TAG}_ape.zip" \
-    -p --plot_mode xy --save_plot "$OUT/${TAG}_ape_startaligned" \
+"$EVO_APE" tum "$OUT/gt.tum" "$OUT/dr.tum" \
+    --save_results "$OUT/ape.zip" \
+    -p --plot_mode xy --save_plot "$OUT/ape_startaligned" \
     2>/dev/null | sed -n '/APE w.r.t/,/^$/p;/^ *\(max\|mean\|median\|min\|rmse\|sse\|std\)/p' \
-    | tee "$OUT/${TAG}_ape.txt"
+    | tee "$OUT/ape.txt"
 
 echo
-echo "plot: $OUT/${TAG}_ape_startaligned_map.png"
+echo "plot: $OUT/ape_startaligned_map.png"

@@ -59,6 +59,15 @@ struct RosbagConfig {
     // extrinsic, IMU noise densities, td, solver limits). Relative to the
     // process CWD. Required: there is no estimator without it.
     std::string vins_config;
+    // Deployment-mode heading seed. The GT auto-aligner recovers, in the
+    // drift-free limit, exactly the vehicle heading at the first tracked frame
+    // plus a fixed mounting constant -- so a heading reading replaces it and
+    // the GT TRAJECTORY is never touched. Enabled: the yaw is seeded at frame 0
+    // from the attitude source already driving `cur_R` (the FRL .pos when
+    // ppk_path is set, otherwise the IMU's own orientation) and the auto-aligner
+    // never runs. Calibrate the offset once as (aligner_yaw + heading_at_t0).
+    bool   heading_seed = false;
+    double heading_mount_offset = 0.0;   // degrees
     // Structured run log (see odometry/utils/RunLog.h). Empty dir disables it.
     std::string log_dir;
     std::string log_level = "info";   // off | info | debug | trace

@@ -259,6 +259,13 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     // rather than the data source.
     if (!fs["vins_config"].empty()) out.vins_config = readStr(fs["vins_config"]);
 
+    cv::FileNode hd = fs["heading"];
+    if (!hd.empty()) {
+        if (!hd["enabled"].empty()) out.heading_seed = ((int)hd["enabled"] != 0);
+        if (!hd["mount_yaw_offset"].empty())
+            out.heading_mount_offset = (double)hd["mount_yaw_offset"];
+    }
+
     cv::FileNode lg = fs["logging"];
     if (!lg.empty()) {
         if (!lg["dir"].empty())          out.log_dir   = readStr(lg["dir"]);

@@ -511,10 +511,12 @@ int main(int argc, char** argv) {
         const double frame_time = img_msg->header.stamp.toSec();
 
         GroundTruthData current_gt;
+        // Declared outside the timed block: the heading seed below reads `yaw`
+        // (NED, radians) as its heading source.
+        float pitch = 0.0f, roll = 0.0f, yaw = 0.0f;
         {
             PERF_SCOPE(perf::Gt);
             current_gt.position = cur_position;
-            float pitch, roll, yaw;
             PoseMath::extractEulerFromRotation(cur_R, pitch, roll, yaw);
             current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
             // Altimeter (AGL) for homography metric scale; left NaN when disabled.
@@ -542,6 +544,36 @@ int main(int argc, char** argv) {
             // integrator needed applies here. Only the yaw alignment below sits
             // on top.
             cv::Mat M = pipeline->getGlobalTransformVO();
+
+            // Deployment-mode heading seed. Solves the same Z rotation the GT
+            // aligner does, but from the heading at this first tracked frame:
+            //   align_yaw = mount_offset - heading(t0)
+            // Setting align_ready here means the GT aligner below never runs,
+            // and the trajectory is aligned from frame 0 rather than after the
+            // first aligner_init_distance metres of GT travel.
+            //
+            // What this buys: the GT TRAJECTORY is no longer used to orient the
+            // estimate -- only a single heading scalar at t0, which a compass or
+            // AHRS supplies in flight. `yaw` here comes from cur_R, i.e. from
+            // whatever attitude source is already driving it (the FRL .pos when
+            // ppk_path is set, otherwise the IMU's own orientation), so on this
+            // bag it is still a ground-truth-derived number -- but a scalar
+            // heading, not a position track, which is the part that matters.
+            if (bag_cfg.heading_seed && !align_ready) {
+                const double a = bag_cfg.heading_mount_offset * M_PI / 180.0 - yaw;
+                const double c = std::cos(a), sn = std::sin(a);
+                align_T_vo = (cv::Mat_<double>(4, 4) <<
+                    c, -sn, 0, 0,
+                    sn,  c, 0, 0,
+                    0,   0, 1, 0,
+                    0,   0, 0, 1);
+                align_ready = true;
+                std::cout << "\n[Heading] seeded: heading=" << yaw * 180.0 / M_PI
+                          << " deg (NED) + mount offset "
+                          << bag_cfg.heading_mount_offset << " deg -> yaw="
+                          << std::remainder(a * 180.0 / M_PI, 360.0)
+                          << " deg at frame " << frame_id << " (GT trajectory unused)\n";
+            }
 
             // Auto-aligner: record the VO and GT start once tracking begins, and
             // once GT has travelled aligner_init_distance, solve the yaw that

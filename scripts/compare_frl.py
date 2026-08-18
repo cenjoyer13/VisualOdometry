@@ -123,12 +123,23 @@ def main():
 
     files = []
     for p in args.paths:
-        files += sorted(glob.glob(os.path.join(p, '*.csv'))) if os.path.isdir(p) else [p]
+        if os.path.isdir(p):
+            # results/ is one folder per run (see results/README.md), so accept
+            # either a run folder or the parent of several.
+            here = sorted(glob.glob(os.path.join(p, '*.csv')))
+            nested = sorted(glob.glob(os.path.join(p, '*', 'trajectory.csv')))
+            files += here + nested
+        else:
+            files.append(p)
 
     frl_cache = {}
     print(f"{'result':40} {'n':>5} {'ATE3D':>8} {'ATE2D':>8} {'ATEz':>7} {'mean':>8} {'max':>8} {'final':>8}")
     for f in files:
         name = os.path.splitext(os.path.basename(f))[0]
+        # A run folder holds its result as <run>/trajectory.csv, so the run name
+        # -- and hence the config -- comes from the folder, not the file.
+        if name == 'trajectory':
+            name = os.path.basename(os.path.dirname(os.path.abspath(f)))
         combo = name.split('__')[0]
         cfg = os.path.join(args.configs, combo + '.yaml')
         if not os.path.exists(cfg):
