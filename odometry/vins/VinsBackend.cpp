@@ -23,7 +23,15 @@ VinsBackend::VinsBackend(const std::string& vins_config) {
         std::cout << "[VinsBackend] WARNING: multiple_thread is 1 in "
                   << vins_config << ". Set it to 0 for deterministic replay.\n";
     }
-    std::cout << "[VinsBackend] VINS estimator ready (" << vins_config << ")\n";
+    // `freq` is vestigial in VINS-Fusion (VINS-Mono's FREQ throttle was replaced
+    // by an every-other-frame drop tied to multiple_thread, which inputFeature()
+    // bypasses), so read it here and enforce it ourselves. 0 disables.
+    {
+        cv::FileStorage fs(vins_config, cv::FileStorage::READ);
+        if (fs.isOpened() && !fs["freq"].empty()) feed_hz_ = (double)fs["freq"];
+    }
+    std::cout << "[VinsBackend] VINS estimator ready (" << vins_config
+              << "), feed throttle " << feed_hz_ << " Hz\n";
 }
 
 VinsBackend::~VinsBackend() = default;
@@ -38,6 +46,23 @@ void VinsBackend::addFrame(double t,
                            const std::vector<int64_t>& ids,
                            const std::vector<cv::Point2f>& pts,
                            const CameraIntrinsics& K) {
+    // Feed-rate throttle, standing in for the one we bypassed. VINS's own
+    // tracker only emits a featureFrame when it is below FREQ Hz (feature_tracker
+    // .cpp's PUB_THIS_FRAME gate), and upstream additionally drops every other
+    // frame when multiple_thread is 1. Going through inputFeature() skips both,
+    // so without this the backend sees the raw image rate.
+    //
+    // That is not merely wasteful. The sliding window is a fixed 11 states, so
+    // doubling the feed halves the time span it covers, and relativePose() then
+    // cannot find two frames far enough apart to hit its 30-px average-parallax
+    // threshold -- reported as "Not enough features or parallax", which is
+    // exactly what this bag produced at the full ~16 Hz rate.
+    if (feed_hz_ > 0.0) {
+        const double min_dt = 1.0 / feed_hz_;
+        if (last_fed_t_ > 0.0 && (t - last_fed_t_) < min_dt * 0.99) return;
+        last_fed_t_ = t;
+    }
+
     // featureFrame layout mirrors FeatureTracker::trackImage()'s return value
     // exactly -- see the header for why velocity is left at zero.
     std::map<int, std::vector<std::pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
@@ -55,6 +80,29 @@ void VinsBackend::addFrame(double t,
         // the SAME feature id, which is how VINS recognizes a stereo pair.
         featureFrame[static_cast<int>(ids[i])].emplace_back(0, xyz_uv_velocity);
     }
+
+    // Feed diagnostics. VINS's initialiser fails on two distinct conditions
+    // ("Not enough features or parallax" from relativePose, "IMU excitation not
+    // enouth" from initialStructure) and telling them apart needs to know what
+    // the frontend is actually delivering: the image rate we feed at, how many
+    // features per frame, and -- the one that matters most -- how many track
+    // ids survive between consecutive frames. Short tracks starve
+    // getCorresponding() of shared observations across the window no matter how
+    // many features each individual frame carries.
+    if (dbg_every_ > 0 && (++dbg_frames_ % dbg_every_) == 0) {
+        size_t carried = 0;
+        for (size_t i = 0; i < n; ++i)
+            if (prev_ids_.count(ids[i])) ++carried;
+        const double dt = (dbg_prev_t_ > 0.0) ? (t - dbg_prev_t_) : 0.0;
+        std::cout << "[VinsBackend] frame " << dbg_frames_
+                  << "  dt=" << dt << "s"
+                  << "  feats=" << n
+                  << "  carried=" << carried
+                  << " (" << (n ? 100.0 * carried / n : 0.0) << "%)\n";
+    }
+    dbg_prev_t_ = t;
+    prev_ids_.clear();
+    for (size_t i = 0; i < n; ++i) prev_ids_.insert(ids[i]);
 
     est_->inputFeature(t, featureFrame);
 }

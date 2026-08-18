@@ -15,18 +15,31 @@ rosbag:
   img_topic: /camera/image_mono
   gps_topic: /fix
   imu_topic: /imu/data
-  start_time: 30.0
+  # From the very start of the bag. The old 30 s offset existed to match the
+  # evaluation window the ORB-SLAM3 / old-VO-pipeline numbers were computed
+  # over, but it drops the estimator straight into steady cruise -- the worst
+  # case for VINS's initialiser, which needs accelerometer excitation before
+  # scale and gravity become observable. The takeoff transient at the head of
+  # the bag is exactly that excitation.
+  start_time: 0.0
   end_time: 300.0
 
 frontend: optical_flow
+# Matched to VINS's own feature tracker (max_cnt 150, min_dist 30). The backend
+# is tuned for that density: at the previous 1000 corners with 8x6 bucketing the
+# frontend was handing it ~1500 features per frame, ~10x its design point, which
+# blew the per-frame solve out to ~300 ms and gave Ceres a far larger problem
+# than its solver-time budget assumes.
 optical_flow:
-  max_corners: 1000
-  win_size: 21 
+  max_corners: 150
+  min_distance: 30.0
+  win_size: 21
   fb_error_threshold: 1.0
 
-
+# Off, because VINS does not bucket: it enforces spatial spread through
+# min_distance masking instead, and stacking both starves the replenish cap.
 bucketing:
-  enabled: 1
+  enabled: 0
   grid_cols: 8
   grid_rows: 6
   max_features_per_bucket: 30
