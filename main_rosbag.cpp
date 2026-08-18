@@ -351,7 +351,12 @@ int main(int argc, char** argv) {
     auto pipeline = OdometryPipeline::build(config, bag_cfg.vins_config);
 
     std::ofstream log_file(out_path);
-    log_file << "Frame,Pred_X,Pred_Y,Pred_Z,Q_X,Q_Y,Q_Z,Q_W\n";
+    // Column 0 is the image timestamp (seconds, bag clock), not a frame index:
+    // evo_evaluate/prepare_evo.py keys its GT time-sync and its yaw-only
+    // alignment off it, and a frame counter silently produces a garbage
+    // time-shift there.
+    log_file << "Timestamp,Pred_X,Pred_Y,Pred_Z,Q_X,Q_Y,Q_Z,Q_W\n";
+    log_file << std::fixed << std::setprecision(9);
 
     std::cout << "[EVALUATOR] Starting rosbag replay: " << bag_cfg.bag_path << "\n";
     std::cout << "  img_topic=" << bag_cfg.img_topic
@@ -534,7 +539,7 @@ int main(int argc, char** argv) {
             float qx, qy, qz, qw;
             PoseMath::rot2quat(R_pred, qx, qy, qz, qw);
 
-            log_file << frame_id << "," << pred_x << "," << pred_y << "," << pred_z << ","
+            log_file << frame_time << "," << pred_x << "," << pred_y << "," << pred_z << ","
                      << qx << "," << qy << "," << qz << "," << qw << "\n";
 
             if (!no_gui) {
