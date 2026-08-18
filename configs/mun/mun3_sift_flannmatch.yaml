@@ -87,9 +87,6 @@ system:
   num_threads: 12
   verbose: 0
   
-trajectory_flip:
-  x: -1
-  z: -1
 
 aligner:
   init_distance: 10.0   # GT travel (m) before the VO->GT yaw is solved

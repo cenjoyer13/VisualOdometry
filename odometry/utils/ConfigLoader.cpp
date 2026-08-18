@@ -210,12 +210,6 @@ bool ConfigLoader::loadImageSequenceConfig(ImageSequenceConfig& out) {
             out.heading_mount_offset = (double)hs["mount_yaw_offset"];
     }
 
-    cv::FileNode flip = fs["trajectory_flip"];
-    if (!flip.empty()) {
-        if (!flip["x"].empty()) out.traj_sign[0] = (double)flip["x"];
-        if (!flip["y"].empty()) out.traj_sign[1] = (double)flip["y"];
-        if (!flip["z"].empty()) out.traj_sign[2] = (double)flip["z"];
-    }
 
     // cam0->body extrinsic (top-level opencv-matrix), same key as the rosbag
     // schema. Left empty when absent, which the evaluator treats as identity.
@@ -254,15 +248,6 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
     cv::FileNode ext = fs["body_T_cam0"];
     if (!ext.empty()) ext >> out.body_T_cam0;
 
-    // Per-axis sign flip for the logged trajectory, to reconcile a VO-vs-ENU
-    // handedness mismatch (a reflection a rotation cannot fix). Defaults to no
-    // flip; each axis is read independently.
-    cv::FileNode flip = fs["trajectory_flip"];
-    if (!flip.empty()) {
-        if (!flip["x"].empty()) out.traj_sign[0] = (double)flip["x"];
-        if (!flip["y"].empty()) out.traj_sign[1] = (double)flip["y"];
-        if (!flip["z"].empty()) out.traj_sign[2] = (double)flip["z"];
-    }
 
     cv::FileNode viz = fs["visualizer"];
     if (!viz.empty() && !viz["scale"].empty()) out.viz_scale = (double)viz["scale"];

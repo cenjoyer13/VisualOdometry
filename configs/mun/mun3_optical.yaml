@@ -72,14 +72,6 @@ system:
   num_threads: 12
   verbose: 0
 
-# No flip. The old (-1, 1, -1) was a 180-degree rotation about Y that fixed the
-# handedness of the previous pipeline's accumulated CAMERA-frame trajectory.
-# VINS reports a gravity-aligned BODY pose with Z already up, so applying it now
-# inverts altitude: the estimate descended while the aircraft climbed, and
-# yaw-only alignment cannot undo a flipped Z.
-trajectory_flip:
-  x: 1
-  z: 1
 
 aligner:
   init_distance: 10.0   # GT travel (m) before the VO->GT yaw is solved

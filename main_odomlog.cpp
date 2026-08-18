@@ -421,14 +421,6 @@ int main(int argc, char** argv) {
     // mismatch (a reflection a yaw can't fix -- e.g. a nadir camera's image-down
     // axis). Applied to the VO pose by conjugation S*T*S, which negates the
     // chosen position axes while keeping the rotation a valid (det +1) matrix.
-    cv::Mat traj_flip = cv::Mat::eye(4, 4, CV_64F);
-    traj_flip.at<double>(0, 0) = seq_cfg.traj_sign[0];
-    traj_flip.at<double>(1, 1) = seq_cfg.traj_sign[1];
-    traj_flip.at<double>(2, 2) = seq_cfg.traj_sign[2];
-    if (seq_cfg.traj_sign != cv::Vec3d(1.0, 1.0, 1.0)) {
-        std::cout << "[Trajectory] Axis sign flip: (" << seq_cfg.traj_sign[0] << ", "
-                  << seq_cfg.traj_sign[1] << ", " << seq_cfg.traj_sign[2] << ")\n";
-    }
 
     // XY-plane auto-aligner (only meaningful with GT): once GT has travelled
     // aligner_init_distance from the first tracked frame, solve the yaw between
@@ -469,8 +461,7 @@ int main(int argc, char** argv) {
             // VO pose in the display frame: camera->body rotation left-applied
             // (Python-style, rotates the trajectory into the body frame) and the
             // handedness flip by conjugation, but not yet the yaw alignment.
-            cv::Mat M = traj_flip * cam_to_body
-                        * pipeline->getGlobalTransformVO() * traj_flip;
+            cv::Mat M = cam_to_body * pipeline->getGlobalTransformVO();
 
             // Deployment-mode heading seed. Solves the same Z rotation the GT
             // aligner does, but from the heading sensor at this first tracked

@@ -287,30 +287,14 @@ int main(int argc, char** argv) {
         }
     }
 
-    // cam0->body extrinsic. The logged VO pose (a camera pose in the VO world)
-    // is re-expressed at the body via T_world_body = T_world_cam0 * cam0_T_body,
-    // where cam0_T_body = (body_T_cam0)^-1. Identity when no extrinsic is given.
-    cv::Mat cam0_T_body = cv::Mat::eye(4, 4, CV_64F);
-    if (!bag_cfg.body_T_cam0.empty()) {
-        cv::Mat ext;
-        bag_cfg.body_T_cam0.convertTo(ext, CV_64F);
-        cam0_T_body = ext.inv();
-        std::cout << "[Extrinsic] Applying body_T_cam0 to logged poses.\n";
-    }
-
-    // Per-axis sign flip S = diag(sx,sy,sz,1) for a VO-vs-ENU handedness
-    // mismatch. Applied to the logged pose by conjugation S*T*S, which negates
-    // the chosen position axes while keeping the rotation a valid (det +1)
-    // matrix. Identity when no trajectory_flip block is given.
-    cv::Mat traj_flip = cv::Mat::eye(4, 4, CV_64F);
-    traj_flip.at<double>(0, 0) = bag_cfg.traj_sign[0];
-    traj_flip.at<double>(1, 1) = bag_cfg.traj_sign[1];
-    traj_flip.at<double>(2, 2) = bag_cfg.traj_sign[2];
-    if (bag_cfg.traj_sign != cv::Vec3d(1.0, 1.0, 1.0)) {
-        std::cout << "[Trajectory] Axis sign flip: ("
-                  << bag_cfg.traj_sign[0] << ", " << bag_cfg.traj_sign[1]
-                  << ", " << bag_cfg.traj_sign[2] << ")\n";
-    }
+    // No handedness correction and no cam0->body re-expression: VINS already
+    // reports a gravity-aligned BODY pose (Z up), in the same convention as the
+    // ENU ground truth up to an unobservable yaw, which the evaluation aligns.
+    //
+    // Both used to be needed because the old pipeline integrated a CAMERA-frame
+    // trajectory in whatever handedness the pose estimator produced. Carrying
+    // them over inverted altitude - the estimate descended while the aircraft
+    // climbed - and cost 904 m of ATE against 227 m without.
 
 #ifdef USE_ONNX
     if (config.backend == ComputeBackend::CUDA) {
@@ -491,13 +475,12 @@ int main(int argc, char** argv) {
         pipeline->processFrame(frame_buffer, current_gt, frame_time);
 
         if (pipeline->isTrackingActive()) {
-            // Body-referenced VO pose in the display frame: extrinsic + the
-            // handedness sign flip applied (conjugation by traj_flip keeps the
-            // rotation valid), but not yet the yaw alignment.
-            // getGlobalTransformVO() is already a BODY pose (VINS estimates the
-            // IMU state), so cam0_T_body must NOT be applied -- the old pipeline
-            // integrated a camera pose and needed it.
-            cv::Mat M = traj_flip * pipeline->getGlobalTransformVO() * traj_flip;
+            // Body pose straight from the backend. VINS estimates the IMU state
+            // directly, in a gravity-aligned frame, so neither the cam0->body
+            // re-expression nor the handedness flip that the old camera-frame
+            // integrator needed applies here. Only the yaw alignment below sits
+            // on top.
+            cv::Mat M = pipeline->getGlobalTransformVO();
 
             // Auto-aligner: record the VO and GT start once tracking begins, and
             // once GT has travelled aligner_init_distance, solve the yaw that

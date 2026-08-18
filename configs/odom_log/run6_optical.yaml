@@ -54,11 +54,6 @@ camera:
 pose_estimator:
   type: Homography
 
-# The nadir mount's image-down axis makes the VO trajectory a mirror of the ENU
-# GT -- a reflection the yaw aligner cannot undo. Flip ONE horizontal axis;
-# x and y are equivalent here since the aligner re-solves heading afterward.
-trajectory_flip:
-  y: -1.0
 
 # cam0->body extrinsic for the nadir mount, same key/handling as the mun rosbag
 # configs. Re-expresses the camera-frame VO pose at the body frame so the
