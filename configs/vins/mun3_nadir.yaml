@@ -93,8 +93,19 @@ equalize: 1
 flow_back: 1            # forward+backward optical flow
 
 #optimization parameters
-max_solver_time: 0.04   # max solver itration time (s)
-max_num_iterations: 8   # max solver itrations
+# Effectively unbounded, so max_num_iterations is the binding constraint.
+#
+# Upstream 0.04 is a real-time budget: Ceres is told to stop after that much
+# WALL CLOCK (estimator.cpp sets options.max_solver_time_in_seconds), so how far
+# it converges depends on machine load. Two replays of this identical config
+# differed by a whole-trajectory yaw and gave ATEs of 226.9 m and 247.5 m.
+#
+# That is fatal for this fork's purpose: comparing frontends needs the backend
+# to be a fixed quantity, otherwise run-to-run variance is confounded with the
+# frontend change under test. Offline replay has no real-time deadline to meet,
+# so trade it for reproducibility. Restore 0.04 for any real-time deployment.
+max_solver_time: 10.0   # max solver iteration time (s)
+max_num_iterations: 8   # max solver iterations
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
