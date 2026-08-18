@@ -38,7 +38,7 @@ def load(path):
                 bad += 1
                 continue
             t = r.get("type", "?")
-            if t in ("run.meta", "run.vins"):
+            if t in ("run.meta", "run.vins", "perf.summary"):
                 meta.update(r)
             else:
                 by_type[t].append(r)
@@ -179,6 +179,21 @@ def health(meta, by):
         out.append((("WARN" if vmax > 100 else "OK"), "velocity", f"max |v| {vmax:.1f} m/s"))
         out.append((("WARN" if bamax > 2.0 else "OK"), "accel bias", f"max |ba| {bamax:.2f} m/s^2"))
 
+    # -- perf: what dominates, and whether anything is unmeasured ---------
+    if "total_mean" in meta and meta["total_mean"] > 0:
+        tot = meta["total_mean"]
+        stages = ["bag_read", "decode", "undistort", "gt", "frontend",
+                  "backend", "imu", "log", "gui"]
+        acc = sum(meta.get(f"{st}_mean", 0.0) for st in stages)
+        top = max(stages, key=lambda st: meta.get(f"{st}_mean", 0.0))
+        out.append(("OK", "perf hotspot",
+                    f"{top} is {100.0 * meta.get(top + '_mean', 0.0) / tot:.0f}% of "
+                    f"{tot:.1f} ms/frame"))
+        un = (tot - acc) / tot
+        if un > 0.10:
+            out.append(("WARN", "perf unattributed",
+                        f"{un * 100:.0f}% of loop time is claimed by no stage"))
+
     # -- solver: saturation and determinism -------------------------------
     if meta:
         mst = meta.get("max_solver_time")
@@ -225,6 +240,37 @@ def cmd_summary(args):
         if solve:
             print(f"  backend solve      p50 {pct(solve,50):7.1f}   "
                   f"p90 {pct(solve,90):7.1f}   max {max(solve):7.1f}")
+
+    # -- perf breakdown, ranked by share of the loop --------------------
+    stages = ["bag_read", "decode", "undistort", "gt", "frontend",
+              "backend", "imu", "log", "gui"]
+    if f"total_mean" in meta:
+        tot = meta["total_mean"]
+        print()
+        print("=" * W)
+        print(f"PERF  ({meta.get('frames', '?')} frames, ms/frame)")
+        print("=" * W)
+        print(f"  {'stage':<12} {'mean':>8} {'p50':>8} {'p90':>8} {'max':>8}   share")
+        rows = [(meta.get(f"{st}_mean", 0.0), st) for st in stages]
+        rows.sort(reverse=True)
+        acc = 0.0
+        for mean, st in rows:
+            if mean <= 0.0:
+                continue
+            acc += mean
+            share = 100.0 * mean / tot if tot > 0 else 0.0
+            print(f"  {st:<12} {mean:8.2f} {meta.get(st+'_p50',0):8.2f} "
+                  f"{meta.get(st+'_p90',0):8.2f} {meta.get(st+'_max',0):8.2f}   {share:5.1f}%")
+        print(f"  {'-'*12} {'-'*8} {'-'*8} {'-'*8} {'-'*8}   -----")
+        print(f"  {'total':<12} {tot:8.2f} {meta.get('total_p50',0):8.2f} "
+              f"{meta.get('total_p90',0):8.2f} {meta.get('total_max',0):8.2f}   100.0%")
+        un = tot - acc
+        if tot > 0 and un / tot > 0.10:
+            print(f"  {'UNATTRIBUTED':<12} {un:8.2f} {'':>8} {'':>8} {'':>8}   "
+                  f"{100.0*un/tot:5.1f}%   <- loop time no stage claims")
+        wall = tot * float(meta.get("frames", 0)) / 1000.0
+        print(f"\n  wall clock in the loop: {wall:.0f} s "
+              f"({(meta.get('frames',0) / wall) if wall > 0 else 0:.1f} frames/s)")
 
     vins = by.get("vins", [])
     if vins:

@@ -31,6 +31,7 @@
 #include "odometry/utils/PoseMath.h"
 #include "odometry/utils/RealTime2DTrajectory.h"
 #include "odometry/utils/RunLog.h"
+#include "odometry/utils/Perf.h"
 
 // NED roll/pitch/yaw (degrees) to 3x3 rotation matrix (double). Standard
 // aerospace body-to-NED sequence R = Rz(yaw) * Ry(pitch) * Rx(roll); this is
@@ -340,6 +341,8 @@ int main(int argc, char** argv) {
         RunLog& L = RunLog::instance();
         L.open(bag_cfg.log_dir, RunLog::parseLevel(bag_cfg.log_level));
         L.setFrameStride(bag_cfg.log_frame_stride);
+        Perf::instance().setEnabled(true);
+        Perf::instance().setReportEvery(bag_cfg.perf_report_every);
 
         LogRec m("run.meta", /*stamp_frame=*/false);
         m("v", 1)
@@ -415,6 +418,7 @@ int main(int argc, char** argv) {
 
     int frame_id = 0;
 
+    auto t_loop_prev = std::chrono::steady_clock::now();
     for (const rosbag::MessageInstance& m : view) {
         const std::string& topic = m.getTopic();
         const uint64_t ts_ns = m.getTime().toNSec();
@@ -429,14 +433,18 @@ int main(int argc, char** argv) {
         if (rel_ns < skip_ns) continue;
 
         if (topic == bag_cfg.imu_topic) {
-            auto imu = m.instantiate<sensor_msgs::Imu>();
+            sensor_msgs::Imu::ConstPtr imu;
+            { PERF_SCOPE(perf::BagRead); imu = m.instantiate<sensor_msgs::Imu>(); }
             if (!imu) continue;
             // Every IMU sample goes to the backend: VINS owns buffering,
             // preintegration and the td offset. Unconditional now -- there is no
             // vision-only mode left to gate on.
-            pipeline->addImu(imu->header.stamp.toSec(),
-                cv::Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z),
-                cv::Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z));
+            {
+                PERF_SCOPE(perf::Imu);
+                pipeline->addImu(imu->header.stamp.toSec(),
+                    cv::Vec3d(imu->linear_acceleration.x, imu->linear_acceleration.y, imu->linear_acceleration.z),
+                    cv::Vec3d(imu->angular_velocity.x, imu->angular_velocity.y, imu->angular_velocity.z));
+            }
             // GT attitude from the IMU orientation only when PPK/FRL isn't driving it.
             if (!use_ppk)
                 cur_R = quatToRot(imu->orientation.x, imu->orientation.y,
@@ -483,10 +491,12 @@ int main(int argc, char** argv) {
         // Hold images until the first GPS / PPK packet pins the local origin.
         if (!have_origin) continue;
 
-        auto img_msg = m.instantiate<sensor_msgs::Image>();
-        cv::Mat frame = decodeImage(img_msg);
+        sensor_msgs::Image::ConstPtr img_msg;
+        { PERF_SCOPE(perf::BagRead); img_msg = m.instantiate<sensor_msgs::Image>(); }
+        cv::Mat frame;
+        { PERF_SCOPE(perf::Decode); frame = decodeImage(img_msg); }
         if (frame.empty()) continue;
-        if (camera) frame = camera->undistortImage(frame);
+        if (camera) { PERF_SCOPE(perf::Undistort); frame = camera->undistortImage(frame); }
 
         // Image timestamp on the IMU clock: image_clock + td = imu_clock.
         // Raw image stamp: VINS applies its own configured td internally
@@ -495,18 +505,22 @@ int main(int argc, char** argv) {
         const double frame_time = img_msg->header.stamp.toSec();
 
         GroundTruthData current_gt;
-        current_gt.position = cur_position;
-        float pitch, roll, yaw;
-        PoseMath::extractEulerFromRotation(cur_R, pitch, roll, yaw);
-        current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
-        // Altimeter (AGL) for homography metric scale; left NaN when disabled.
-        if (bag_cfg.altimeter_scale)
-            current_gt.altitude = (float)(cur_alt - baseline_agl);
+        {
+            PERF_SCOPE(perf::Gt);
+            current_gt.position = cur_position;
+            float pitch, roll, yaw;
+            PoseMath::extractEulerFromRotation(cur_R, pitch, roll, yaw);
+            current_gt.orientation = cv::Vec3f(pitch, roll, yaw);
+            // Altimeter (AGL) for homography metric scale; left NaN when disabled.
+            if (bag_cfg.altimeter_scale)
+                current_gt.altitude = (float)(cur_alt - baseline_agl);
+        }
 
         // Frame context for every record emitted while this frame is processed,
         // including the ones VINS raises from inside the solve.
         RunLog::instance().setFrame(frame_id, frame_time);
         {
+            PERF_SCOPE(perf::Log);
             const double gp[3] = {current_gt.position[0], current_gt.position[1],
                                   current_gt.position[2]};
             LogRec("gt").vec("p", gp, 3)("agl", (double)current_gt.altitude);
@@ -563,10 +577,14 @@ int main(int argc, char** argv) {
             float qx, qy, qz, qw;
             PoseMath::rot2quat(R_pred, qx, qy, qz, qw);
 
-            log_file << frame_time << "," << pred_x << "," << pred_y << "," << pred_z << ","
-                     << qx << "," << qy << "," << qz << "," << qw << "\n";
+            {
+                PERF_SCOPE(perf::Log);
+                log_file << frame_time << "," << pred_x << "," << pred_y << "," << pred_z << ","
+                         << qx << "," << qy << "," << qz << "," << qw << "\n";
+            }
 
             if (!no_gui) {
+                PERF_SCOPE(perf::Gui);
                 cv::Vec3f est_xyz(pred_x, pred_y, pred_z);
                 cv::Mat traj_img = trajectory_visualizer.update(est_xyz, current_gt.position);
                 cv::imshow("Rosbag 2D Trajectory", traj_img);
@@ -589,9 +607,21 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Total spans from the END of the previous image frame to the end of
+        // this one, so it also covers the IMU and GPS iterations processed in
+        // between. Bracketing only the image iteration undercounts the loop:
+        // those other messages still add to bag_read and imu, and the stage sum
+        // then exceeds Total, which is nonsense. This is the honest "wall time
+        // the loop spends per output frame".
+        const auto t_now = std::chrono::steady_clock::now();
+        Perf::instance().add(perf::Total,
+            std::chrono::duration<double, std::milli>(t_now - t_loop_prev).count());
+        t_loop_prev = t_now;
+        Perf::instance().endFrame();
         frame_id++;
     }
 
+    Perf::instance().finish();
     bag.close();
     printf("\n");
     log_file.close();

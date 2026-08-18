@@ -248,6 +248,7 @@ bool ConfigLoader::loadRosbagConfig(RosbagConfig& out) {
         if (!lg["dir"].empty())          out.log_dir   = readStr(lg["dir"]);
         if (!lg["level"].empty())        out.log_level = readStr(lg["level"]);
         if (!lg["frame_stride"].empty()) out.log_frame_stride = (int)lg["frame_stride"];
+        if (!lg["perf_report_every"].empty()) out.perf_report_every = (int)lg["perf_report_every"];
     }
 
     // cam0->body extrinsic (top-level opencv-matrix). Left empty when absent,

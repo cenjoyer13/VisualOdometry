@@ -63,6 +63,9 @@ struct RosbagConfig {
     std::string log_dir;
     std::string log_level = "info";   // off | info | debug | trace
     int log_frame_stride = 1;
+    // Frames between console perf reports. 0 disables the periodic report;
+    // the per-frame records and final summary are unaffected.
+    int perf_report_every = 300;
 };
 
 // Wraps an OpenCV FileStorage handle and converts a YAML config file into an

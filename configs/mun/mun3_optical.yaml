@@ -13,6 +13,7 @@ logging:
   dir: ../results/mun3_optical
   level: info
   frame_stride: 1
+  perf_report_every: 500
 
 visualizer:
     scale: 0.2      # px-per-metre zoom of the 2D trajectory window

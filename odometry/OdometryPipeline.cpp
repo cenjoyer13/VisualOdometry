@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "frontend/FrontendFactory.h"
+#include "utils/Perf.h"
 
 std::unique_ptr<OdometryPipeline> OdometryPipeline::build(const OdometryConfig& config,
                                                           const std::string& vins_config) {
@@ -49,7 +50,11 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
         return;
     }
 
-    FrontendResult fr = frontend->process(frame);
+    FrontendResult fr;
+    {
+        PERF_SCOPE(perf::Frontend);
+        fr = frontend->process(frame);
+    }
     metrics.time_detect_ms = fr.detect_ms;
     metrics.time_match_ms = fr.match_ms;
     debug_frame = fr.debug_overlay;
@@ -71,13 +76,20 @@ void OdometryPipeline::processFrame(DeviceBuffer& frame,
     }
 
     const auto t0 = std::chrono::high_resolution_clock::now();
-    backend_->addFrame(timestamp, fr.track_ids, fr.points2D, config.intrinsics);
+    {
+        PERF_SCOPE(perf::Backend);
+        backend_->addFrame(timestamp, fr.track_ids, fr.points2D, config.intrinsics);
+    }
     const auto t1 = std::chrono::high_resolution_clock::now();
     metrics.time_pose_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     // Re-anchor and replenish corners every frame, matching VINS's own tracker:
     // it tracks and tops up continuously rather than holding a keyframe anchor.
-    frontend->promoteKeyframe(frame);
+    // Counted as frontend work -- it is where corner replenishment happens.
+    {
+        PERF_SCOPE(perf::Frontend);
+        frontend->promoteKeyframe(frame);
+    }
 
     const auto t_end = std::chrono::high_resolution_clock::now();
     metrics.time_total_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
