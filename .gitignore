@@ -59,3 +59,6 @@ SKILL.md
 
 # VINS backend run outputs (output_path in the vins yaml)
 vins_output/
+
+# Working narrative, not a shipped artefact (see CLAUDE.md)
+changelog/
